@@ -114,6 +114,5 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 16,
-    color: '#007AFF',
   },
 });

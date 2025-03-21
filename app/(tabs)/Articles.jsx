@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, View, Text, TouchableOpacity, Image } from 'rea
 import React, { useState } from 'react'
 import ArticleCover from '@/components/ui/ArticleCover'
 import { Ionicons } from '@expo/vector-icons'
+import { typography } from '@/constants/typography'
 
 const Articles = () => {
   const [selectedCategory, setSelectedCategory] = useState('Trending Now')
@@ -117,8 +118,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    ...typography.h1,
   },
   categoriesContainer: {
     padding: 10,
@@ -138,8 +138,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   categoryText: {
-    fontSize: 14,
-    fontWeight: '500',
+    ...typography.button,
     color: '#666',
   },
   categoryTextActive: {

@@ -108,11 +108,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
     marginTop: 40,
     marginBottom: 10,
   },
   subtitle: {
+  fontFamily: 'Inter-Bold',
     fontSize: 16,
     color: '#666',
     marginBottom: 40,
@@ -138,15 +139,19 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   socialButtonText: {
+    fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     fontWeight: '500',
   },
   orText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
     color: '#666',
     marginVertical: 20,
     marginHorizontal: 10,
   },
   label: {
+    fontFamily: 'Inter-Regular',
     fontSize: 16,
     marginBottom: 8,
     fontWeight: '500',
@@ -167,6 +172,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   forgotPassword: {
+    fontFamily: 'Inter-Regular',
     color: '#007AFF',
     fontSize: 14,
   },
@@ -183,21 +189,6 @@ const styles = StyleSheet.create({
     right: 15,
     top: 13,
   },
-  termsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  checkbox: {
-    marginRight: 8,
-  },
-  termsText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  termsLink: {
-    color: '#007AFF',
-  },
   loginButton: {
     backgroundColor: '#007AFF',
     padding: 15,
@@ -209,6 +200,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   loginButtonText: {
+    fontFamily: 'Inter-Bold',
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
@@ -222,6 +214,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
   },
   signUpText: {
+    fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: '#666',
   },

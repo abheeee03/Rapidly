@@ -73,12 +73,17 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
+    fontFamily: 'Inter-Medium',
+    color: '#000',
     marginBottom: 8,
+    lineHeight: 22,
   },
   featuredTitle: {
-    fontSize: 20,
+    fontSize: 22,
+    fontFamily: 'Inter-SemiBold',
+    color: '#000',
+    marginBottom: 8,
+    lineHeight: 28,
   },
   authorContainer: {
     flexDirection: 'row',
@@ -86,6 +91,7 @@ const styles = StyleSheet.create({
   },
   authorName: {
     fontSize: 14,
+    fontFamily: 'Inter-Regular',
     color: '#666',
     marginRight: 8,
   },
@@ -96,6 +102,7 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 14,
+    fontFamily: 'Inter-Regular',
     color: '#666',
   },
 })

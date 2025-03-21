@@ -128,7 +128,7 @@ export default function SignUp() {
           <View style={styles.OrLine}></View>
         </View>
         <View style={styles.socialContainer}>
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity style={styles.socialButton} onPress={()=>router.push('/(tabs)')}>
             <Image 
               source={{ uri: 'https://www.google.com/favicon.ico' }}
               style={styles.socialIcon}
@@ -160,12 +160,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
+    fontFamily: 'Inter-Bold',
     fontSize: 28,
-    fontWeight: 'bold',
     marginTop: 40,
     marginBottom: 10,
   },
   subtitle: {
+    fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: '#666',
     marginBottom: 40,
@@ -185,6 +186,7 @@ const styles = StyleSheet.create({
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    
     justifyContent: 'center',
     padding: 12,
     borderRadius: 8,
@@ -202,11 +204,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   orText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
     color: '#666',
     marginVertical: 20,
     marginHorizontal: 10,
   },
   label: {
+  fontFamily: 'Inter-Regular',
     fontSize: 16,
     marginBottom: 8,
     fontWeight: '500',
@@ -227,6 +232,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   forgotPassword: {
+    fontFamily: 'Inter-Regular',
     color: '#007AFF',
     fontSize: 14,
   },
