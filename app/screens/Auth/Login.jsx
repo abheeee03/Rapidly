@@ -12,7 +12,7 @@ export default function Login() {
   const router = useRouter();
 
   const handleLogin = () => {
-    router.push('/screens/LandingScreen');
+    router.push('/(tabs)');
   };
 
   return (
@@ -34,7 +34,7 @@ export default function Login() {
 
         <View style={styles.passwordContainer}>
           <Text style={styles.label}>Password</Text>
-          <TouchableOpacity onPress={() => {}}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)')}>
             <Text style={styles.forgotPassword}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
