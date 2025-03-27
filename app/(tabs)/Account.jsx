@@ -1,52 +1,83 @@
-import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import React from 'react';
+import { useTheme } from '../../context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const Account = () => {
+  const { theme, isDarkMode, toggleTheme } = useTheme();
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView 
+      contentContainerStyle={[
+        styles.container, 
+        { backgroundColor: theme.background }
+      ]}
+    >
       <View style={styles.profileContainer}>
         <Image 
           source={require('../../assets/images/man.png')} 
           style={styles.profileImage} 
         />
-        <Text style={styles.profileName}>Dianne Russell</Text>
-        <Text style={styles.profileRole}>email@here.com</Text>
+        <Text style={[styles.profileName, { color: theme.text }]}>Dianne Russell</Text>
+        <Text style={[styles.profileRole, { color: theme.textSecondary }]}>email@here.com</Text>
       </View>
-      <View style={styles.statsContainer}>
+      <View style={[styles.statsContainer, { borderColor: theme.border }]}>
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>320</Text>
-          <Text style={styles.statLabel}>Following</Text>
+          <Text style={[styles.statNumber, { color: theme.text }]}>320</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>125</Text>
-          <Text style={styles.statLabel}>Liked News</Text>
+          <Text style={[styles.statNumber, { color: theme.text }]}>125</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Liked News</Text>
         </View>
       </View>
+      
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>History</Text>
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionText}>Liked News</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>History</Text>
+        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.optionText, { color: theme.text }]}>Liked News</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionText}>Read Articles</Text>
+        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.optionText, { color: theme.text }]}>Read Articles</Text>
         </TouchableOpacity>
       </View>
+      
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Settings</Text>
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionText}>My Account</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Settings</Text>
+        
+        {/* Dark Mode Toggle */}
+        <View style={[styles.option, { borderBottomColor: theme.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons
+              name={isDarkMode ? "moon" : "sunny"}
+              size={20}
+              color={theme.text}
+              style={{ marginRight: 10 }}
+            />
+            <Text style={[styles.optionText, { color: theme.text }]}>Dark Mode</Text>
+          </View>
+          <Switch
+            value={isDarkMode}
+            onValueChange={toggleTheme}
+            trackColor={{ false: '#767577', true: '#81b0ff' }}
+            thumbColor={isDarkMode ? theme.accent : '#f4f3f4'}
+          />
+        </View>
+        
+        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.optionText, { color: theme.text }]}>My Account</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionText}>Privacy Settings</Text>
+        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.optionText, { color: theme.text }]}>Privacy Settings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionText}>Offline Reading</Text>
+        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.optionText, { color: theme.text }]}>Offline Reading</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionText}>About Us</Text>
+        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.optionText, { color: theme.text }]}>About Us</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionText}>Logout</Text>
+        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
+          <Text style={[styles.optionText, { color: theme.text }]}>Logout</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -58,7 +89,6 @@ export default Account;
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#fff',
     paddingVertical: 20,
   },
   profileContainer: {
@@ -74,16 +104,19 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter-Bold',
   },
   profileRole: {
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter-Regular',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginVertical: 20,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
   },
   stat: {
     alignItems: 'center',
@@ -91,11 +124,11 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter-Bold',
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter-Regular',
   },
   section: {
     marginVertical: 10,
@@ -105,14 +138,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: '#333',
+    fontFamily: 'Inter-SemiBold',
   },
   option: {
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   optionText: {
     fontSize: 16,
+    fontFamily: 'Inter-Regular',
   },
 });

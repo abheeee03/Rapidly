@@ -1,7 +1,11 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
 import React from 'react'
+import { useTheme } from '../../context/ThemeContext'
 
 const ArticleCover = ({ cover, title, author, date, featured }) => {
+  // Get theme from context or from props if passed
+  const {theme} = useTheme()
+  
   if (featured) {
     return (
       <View style={styles.featuredContainer}>
@@ -9,14 +13,14 @@ const ArticleCover = ({ cover, title, author, date, featured }) => {
           source={cover} 
           style={styles.featuredImage}
         />
-        <Text style={styles.featuredTitle} numberOfLines={2}>
+        <Text style={[styles.featuredTitle, { color: theme.text }]} numberOfLines={2}>
           {title}
         </Text>
         <View style={styles.authorContainer}>
-          <View style={styles.authorAvatar} />
-          <Text style={styles.authorName}>{author.name}</Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.date}>{date}</Text>
+          <View style={[styles.authorAvatar, { backgroundColor: theme.border }]} />
+          <Text style={[styles.authorName, { color: theme.textSecondary }]}>{author.name}</Text>
+          <Text style={[styles.dot, { color: theme.textSecondary }]}>•</Text>
+          <Text style={[styles.date, { color: theme.textSecondary }]}>{date}</Text>
         </View>
       </View>
     )
@@ -29,14 +33,14 @@ const ArticleCover = ({ cover, title, author, date, featured }) => {
         style={styles.coverImage}
       />
       <View style={styles.contentContainer}>
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>
           {title}
         </Text>
         <View style={styles.authorContainer}>
-          <View style={styles.authorAvatar} />
-          <Text style={styles.authorName}>{author.name}</Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.date}>{date}</Text>
+          <View style={[styles.authorAvatar, { backgroundColor: theme.border }]} />
+          <Text style={[styles.authorName, { color: theme.textSecondary }]}>{author.name}</Text>
+          <Text style={[styles.dot, { color: theme.textSecondary }]}>•</Text>
+          <Text style={[styles.date, { color: theme.textSecondary }]}>{date}</Text>
         </View>
       </View>
     </View>
@@ -74,14 +78,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontFamily: 'Inter-Medium',
-    color: '#000',
     marginBottom: 8,
     lineHeight: 22,
   },
   featuredTitle: {
     fontSize: 22,
     fontFamily: 'Inter-SemiBold',
-    color: '#000',
     marginBottom: 8,
     lineHeight: 28,
   },
@@ -89,20 +91,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  authorAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+  },
   authorName: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#666',
     marginRight: 8,
   },
   dot: {
     fontSize: 14,
-    color: '#666',
     marginRight: 8,
   },
   date: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#666',
   },
 })

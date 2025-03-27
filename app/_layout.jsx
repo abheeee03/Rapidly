@@ -1,11 +1,13 @@
-import { Slot, Stack } from 'expo-router';
-import { View } from 'react-native';
+import { Slot } from 'expo-router';
 import useFonts from '../hooks/useFonts';
+import { ThemeProvider } from '../context/ThemeContext';
 
 export default function Layout() {
   useFonts();
   
   return (
-    <Slot/>
+    <ThemeProvider>
+      <Slot />
+    </ThemeProvider>
   );
 }

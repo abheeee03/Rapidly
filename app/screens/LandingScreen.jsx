@@ -28,7 +28,7 @@ const LandingScreen = () => {
       </View>
       <View style={styles.ContentContainer}>
         <Text style={{ fontSize: 23, fontWeight: '500', fontFamily: 'Inter-Bold'}}>Welcome to <Text style={{color: "#2D5BD0"}}>
-        FastFeed</Text> </Text>
+        UptoDate</Text> </Text>
         <Text style={{ fontSize: 15, marginBottom: 20, fontFamily: 'Inter-SemiBold' }}>Stay Updated in Seconds !</Text>
         <Text style={{ fontSize: 18, padding: 20, textAlign: 'center', fontFamily: 'Inter-Regular' }}>
           We deliver the latest news and updates in bite-sized video reels, keeping you informed quickly and conveniently. Swipe through engaging, short-form news clips tailored to your interests, because staying updated shouldn’t be a hassle!

@@ -1,26 +1,28 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import React from 'react';
 import { Tabs } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Entypo from '@expo/vector-icons/Entypo';
 import AntDesign from '@expo/vector-icons/AntDesign';
-
+import { useTheme } from '../../context/ThemeContext';
 
 const MainScreenTabs = () => {
+  const { theme } = useTheme();
+  
   return (
     <Tabs
       screenOptions={{
         tabBarHideOnKeyboard: true,
         headerShown: false,
-        tabBarActiveTintColor: 'black',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: theme.accent,
+        tabBarInactiveTintColor: theme.tabBarInactive,
         tabBarShowLabel: false,
         tabBarStyle: {
           height: 60,
           paddingBottom: 10, 
           paddingTop: 10, 
-          backgroundColor: 'black',      
+          backgroundColor: theme.tabBar,      
         },
       }}
     >
@@ -31,7 +33,7 @@ const MainScreenTabs = () => {
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
               size={24} 
-              color="white"
+              color={focused ? theme.accent : theme.text}
             />
           ),
         }}
@@ -44,9 +46,13 @@ const MainScreenTabs = () => {
             <Entypo
               name='sound'
               size={24} 
-              color="white"
+              color={theme.accent}
             />:
-            <AntDesign name="sound" size={24} color="white" />
+            <AntDesign 
+              name="sound" 
+              size={24} 
+              color={theme.text} 
+            />
           ),
         }}
       />
@@ -54,11 +60,10 @@ const MainScreenTabs = () => {
         name="Articles"
         options={{
           tabBarIcon: ({ focused }) => (
-            
             <Ionicons
               name={focused ? 'newspaper' : 'newspaper-outline'}
               size={24}
-              color="white"
+              color={focused ? theme.accent : theme.text}
             />
           ),
         }}
@@ -70,7 +75,7 @@ const MainScreenTabs = () => {
             <Ionicons
               name={focused ? 'search' : 'search-outline'}
               size={24} 
-              color="white"
+              color={focused ? theme.accent : theme.text}
             />
           ),
         }}
@@ -81,8 +86,8 @@ const MainScreenTabs = () => {
           tabBarIcon: ({ focused }) => (
             <MaterialCommunityIcons
               name={focused ? 'account-circle' : 'account-circle-outline'}
-              size={24} // Scale icon when active
-              color="white"
+              size={24}
+              color={focused ? theme.accent : theme.text}
             />
           ),
         }}

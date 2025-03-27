@@ -1,103 +1,67 @@
-import { ScrollView, StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native'
-import React, { useState } from 'react'
-import ArticleCover from '@/components/ui/ArticleCover'
-import { Ionicons } from '@expo/vector-icons'
-import { typography } from '@/constants/typography'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import React from 'react'
+import { useTheme } from '../../context/ThemeContext'
+import AntDesign from '@expo/vector-icons/AntDesign';
+import { router } from 'expo-router';
+
+
+
+
 
 const Articles = () => {
-  const [selectedCategory, setSelectedCategory] = useState('Trending Now')
+
+
+
+  const { theme } = useTheme();
   
-  const categories = ['Trending Now', 'Technology', 'Business']
-
-  const articlesList = [
+  const categories = [
     {
-      cover: require('../../assets/images/cover-img.png'),
-      title: 'Uncovering the Hidden Gems of the Amazon Forest',
-      author: {
-        name: 'Mr. Lana Kub',
-      },
-      date: 'May 1, 2023',
-      featured: true,
+    name: 'Trending Now',
+    categoryCode: 10
     },
     {
-      cover: require('../../assets/images/cover-img.png'),
-      title: "Experience the Serenity of Japan's Traditional...",
-      author: {
-        name: 'Hilda Friesen',
-      },
-      date: 'May 3, 2023',
+    name: 'Education',
+    categoryCode: 10
     },
     {
-      cover: require('../../assets/images/cover-img.png'),
-      title: 'A Journey Through Time: Discovering the Nile river',
-      author: {
-        name: 'Melissa White',
-      },
-      date: 'May 7, 2023',
-    },
+     name: 'Sports',
+     categoryCode: 10
+    }, 
     {
-      cover: require('../../assets/images/cover-img.png'),
-      title: 'Chasing the Northern Lights: A Winter in Finland',
-      author: {
-        name: 'Jeannie Conn',
-      },
-      date: 'May 12, 2023',
-    },
+     name: 'Sports',
+     categoryCode: 10
+    }, 
+    {
+     name: 'Sports',
+     categoryCode: 10
+    }, 
+    {
+     name: 'Accidents',
+     categoryCode: 10
+    }
   ]
-
+  
+  
+  
+  
+  
+  
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <View style={{ backgroundColor: theme.background, flex: 1 }}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Explore</Text>
-        <TouchableOpacity>
-          <Ionicons name="search" size={24} color="#000" />
-        </TouchableOpacity>
+      <Text style={{ color: theme.text, fontFamily: theme.titleFont , fontSize: 20, marginTop: 9 }}>Explore</Text>
+      <TouchableOpacity onPress={()=>router.push('/(tabs)/Search')}>
+      <AntDesign name="search1" size={24} color="white" />
+      </TouchableOpacity>
       </View>
-
-      {/* Categories */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesContainer}
-        contentContainerStyle={styles.categoriesContent}
-      >
-        {categories.map((category, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.categoryButton,
-              selectedCategory === category && styles.categoryButtonActive
-            ]}
-            onPress={() => setSelectedCategory(category)}
-          >
-            <Text style={[
-              styles.categoryText,
-              selectedCategory === category && styles.categoryTextActive
-            ]}>
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Articles List */}
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {articlesList.map((article, index) => (
-          <View key={index} style={article.featured ? styles.featuredArticle : null}>
-            <ArticleCover
-              cover={article.cover}
-              title={article.title}
-              author={article.author}
-              date={article.date}
-              featured={article.featured}
-            />
-          </View>
-        ))}
-      </ScrollView>
+      <ScrollView horizontal={true} style={styles.CategoryContainer}>
+        {
+          categories.map((item, index)=>
+            <TouchableOpacity key={index} style={styles.categoryBtn}>
+            <Text style={{ fontFamily: theme.font, color: theme.text}}>{item.name}</Text>
+          </TouchableOpacity>)
+        }
+        </ScrollView>
     </View>
   )
 }
@@ -105,49 +69,25 @@ const Articles = () => {
 export default Articles
 
 const styles = StyleSheet.create({
-  container: {
-    // flex: 1,
-    backgroundColor: '#fff',
-  },
   header: {
+    position: 'fixed',
+    padding: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    justifyContent: 'space-between'
   },
-  headerTitle: {
-    ...typography.h1,
+  CategoryContainer: {
+    padding: 5,
+    height: 20
   },
-  categoriesContainer: {
+  categoryBtn:{
+    height: 40,
     padding: 10,
-    marginVertical: 16,
-  },
-  categoriesContent: {
-    paddingHorizontal: 16,
-  },
-  categoryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
+    backgroundColor: 'blue',
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    margin: 5
   },
-  categoryButtonActive: {
-    backgroundColor: '#000',
-  },
-  categoryText: {
-    ...typography.button,
-    color: '#666',
-  },
-  categoryTextActive: {
-    color: '#fff',
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-  },
-  featuredArticle: {
-    marginBottom: 24,
-  },
+  ArticleContainer:{
+    
+  }
 })
