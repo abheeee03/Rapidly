@@ -98,7 +98,8 @@ const ArticleCard = ({ article, globalIndex, isLastInPage, onEndReached }) => {
             {limitDescription(article.description)}
           </Text>
         </View>
-        
+
+
         <Link href={{
           pathname: "/screens/ArticleDetail",
           params: linkParams
@@ -106,13 +107,14 @@ const ArticleCard = ({ article, globalIndex, isLastInPage, onEndReached }) => {
           <TouchableOpacity 
             style={[styles.viewDetailsButton, { backgroundColor: theme.accent }]} 
             activeOpacity={0.8}
-          >
+            >
             <Text style={[styles.viewDetailsText, { color: 'white', fontFamily: theme.font }]}>
               Read More
             </Text>
             <Ionicons name="chevron-forward" size={20} color="white" />
           </TouchableOpacity>
         </Link>
+            
       </View>
     </View>
   )
