@@ -1,50 +1,90 @@
-# Welcome to your Expo app 👋
+# UptoDate News App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A modern news reading application built with React Native and Expo, featuring smooth article swiping, Firebase integration, and a beautiful UI.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Article Swiping**: Smooth horizontal swiping between articles using `react-native-pager-view`
+- **Firebase Integration**: Real-time article fetching from Firestore database
+- **Modern UI**: Clean, responsive design with theme support
+- **Optimized Performance**: Efficient article loading and pagination
+- **Error Handling**: Robust error and edge-case handling
+- **Responsive Design**: Adapts to different screen sizes and orientations
 
-   ```bash
-   npm install
-   ```
+## Tech Stack
 
-2. Start the app
+- React Native / Expo
+- Firebase (Firestore)
+- React Navigation
+- Expo Router
+- React Native PagerView
 
-   ```bash
-    npx expo start
-   ```
+## Getting Started
 
-In the output, you'll find options to open the app in a
+### Prerequisites
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- Node.js (v14 or newer)
+- npm or yarn
+- Expo CLI
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Installation
 
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+1. Clone the repository
+```
+git clone https://github.com/yourusername/uptodate-news.git
+cd uptodate-news
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Install dependencies
+```
+npm install
+```
 
-## Learn more
+3. Set up Firebase
+   - Create a Firebase project
+   - Enable Firestore
+   - Add your Firebase config to `Utlis/firebase.js`
 
-To learn more about developing your project with Expo, look at the following resources:
+4. Start the development server
+```
+npx expo start
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Building for Production
 
-## Join the community
+### Android
 
-Join our community of developers creating universal apps.
+```
+eas build -p android --profile production
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### iOS
+
+```
+eas build -p ios --profile production
+```
+
+## Project Structure
+
+- `app/` - Contains all the screens and navigation setup
+  - `(tabs)/` - Tab-based screens (Articles, Videos, etc.)
+  - `screens/` - Other screens like ArticleDetail
+- `components/` - Reusable components (ArticleCard, etc.)
+- `context/` - React context providers (ThemeContext, etc.)
+- `Utlis/` - Utility functions and Firebase configuration
+
+## Performance Optimizations
+
+- Pagination with Firebase for efficient data loading
+- Image loading optimization with loading states
+- Limited render batches for smooth performance
+- Error boundary implementations for production stability
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Credits
+
+- Design inspired by modern news applications
+- Sample articles for demonstration purposes

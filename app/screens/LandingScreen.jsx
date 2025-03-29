@@ -1,7 +1,11 @@
-import { Image, StyleSheet, Text, View } from 'react-native'
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { Link } from 'expo-router'
 import AntDesign from '@expo/vector-icons/AntDesign';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../context/ThemeContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
 const images = [
   require('../../assets/images/city.jpg'),
@@ -12,6 +16,8 @@ const images = [
 
 const LandingScreen = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const { theme, isDarkMode, toggleTheme } = useTheme();
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -22,7 +28,9 @@ const LandingScreen = () => {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <>
+    <StatusBar />
+    <SafeAreaView style={styles.container}>
       <View style={styles.ImgContainer}>
         <Image source={images[currentImageIndex]} style={{ height: '100%', width: '100%' }} />
       </View>
@@ -37,7 +45,8 @@ const LandingScreen = () => {
           <Text style={{ fontSize: 17, color: 'white' }}>Explore <AntDesign name="arrowright" size={20} color="white" /> </Text>
         </Link>
       </View>
-    </View>
+    </SafeAreaView>
+</>
   )
 }
 
@@ -72,5 +81,5 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: '#2D5BD0',
     marginTop: 20,
-  }
+  },
 })

@@ -17,21 +17,38 @@ const cld = new Cloudinary({
   cloud: { cloudName, secure: true }
 });
 
+// Fallback videos to use if a specific video fails to load
+const FALLBACK_VIDEOS = {
+  default: 'https://res.cloudinary.com/demo/video/upload/v1389481363/dog.mp4',
+  nature: 'https://res.cloudinary.com/demo/video/upload/v1543863326/sea_turtle.mp4',
+  animals: 'https://res.cloudinary.com/demo/video/upload/v1526039272/elephants.mp4'
+};
+
 // Function to get video URL with desired options
 export const getVideoUrl = (publicId, width = 720, height = 1280, qualityLevel = 'auto') => {
-  return cld.video(publicId)
-    .resize(scale().width(width).height(height))
-    .delivery(quality(qualityLevel))
-    .toURL();
+  try {
+    return cld.video(publicId)
+      .resize(scale().width(width).height(height))
+      .delivery(quality(qualityLevel))
+      .toURL();
+  } catch (error) {
+    console.error('Error generating video URL:', error);
+    return FALLBACK_VIDEOS.default;
+  }
 };
 
 // Function to get video thumbnail
 export const getVideoThumbnail = (publicId, width = 720, height = 1280, time = '0.1') => {
-  // Construct thumbnail URL
-  // For example: https://res.cloudinary.com/cloud_name/video/upload/so_0.1,w_720,h_1280/publicId.jpg
-  const baseUrl = `https://res.cloudinary.com/${cloudName}/video/upload`;
-  const transformations = `so_${time},w_${width},h_${height}`;
-  return `${baseUrl}/${transformations}/${publicId}.jpg`;
+  try {
+    // Construct thumbnail URL
+    // For example: https://res.cloudinary.com/cloud_name/video/upload/so_0.1,w_720,h_1280/publicId.jpg
+    const baseUrl = `https://res.cloudinary.com/${cloudName}/video/upload`;
+    const transformations = `so_${time},w_${width},h_${height}`;
+    return `${baseUrl}/${transformations}/${publicId}.jpg`;
+  } catch (error) {
+    console.error('Error generating thumbnail URL:', error);
+    return `https://res.cloudinary.com/demo/video/upload/so_0.1,w_${width},h_${height}/dog.jpg`;
+  }
 };
 
 // Function to fetch videos from Cloudinary
@@ -89,35 +106,47 @@ export const fetchCloudinaryVideos = async (folder = '') => {
     
     // Map resources to video objects
     return data.resources.map(resource => {
-      const publicId = resource.public_id;
-      
-      // Extract video name from public_id
-      let title = publicId.split('/').pop();
-      title = title.replace(/_/g, ' ').replace(/-/g, ' ');
-      
-      // Create a random number of likes and comments
-      const likes = Math.floor(Math.random() * 1000) + 10;
-      const comments = Math.floor(Math.random() * 100) + 5;
-      
-      return {
-        id: resource.asset_id || publicId,
-        publicId: publicId,
-        title: title.charAt(0).toUpperCase() + title.slice(1), // Capitalize first letter
-        description: `Video uploaded to Cloudinary folder: ${resource.folder || 'root'}`,
-        likes: likes,
-        comments: comments,
-        url: getVideoUrl(publicId),
-        thumbnail: getVideoThumbnail(publicId),
-        format: resource.format,
-        bytes: resource.bytes,
-        duration: resource.duration,
-        created_at: resource.created_at,
-        width: resource.width,
-        height: resource.height,
-        tags: resource.tags || [],
-        folder: resource.folder || 'root'
-      };
-    });
+      try {
+        const publicId = resource.public_id;
+        
+        // Extract video name from public_id
+        let title = publicId.split('/').pop();
+        title = title.replace(/_/g, ' ').replace(/-/g, ' ');
+        
+        // Create a random number of likes and comments
+        const likes = Math.floor(Math.random() * 1000) + 10;
+        const comments = Math.floor(Math.random() * 100) + 5;
+        
+        // Calculate fallback category based on folder or tags
+        let fallbackCategory = 'default';
+        if (resource.tags && resource.tags.includes('nature')) fallbackCategory = 'nature';
+        if (resource.tags && resource.tags.includes('animals')) fallbackCategory = 'animals';
+        
+        return {
+          id: resource.asset_id || publicId,
+          publicId: publicId,
+          title: title.charAt(0).toUpperCase() + title.slice(1), // Capitalize first letter
+          description: `Video uploaded to Cloudinary folder: ${resource.folder || 'root'}`,
+          likes: likes,
+          comments: comments,
+          url: getVideoUrl(publicId),
+          fallbackUrl: FALLBACK_VIDEOS[fallbackCategory],
+          thumbnail: getVideoThumbnail(publicId),
+          format: resource.format,
+          bytes: resource.bytes,
+          duration: resource.duration,
+          created_at: resource.created_at,
+          width: resource.width,
+          height: resource.height,
+          tags: resource.tags || [],
+          folder: resource.folder || 'root'
+        };
+      } catch (error) {
+        // If there's an error processing a specific video, return a fallback
+        console.error('Error processing video resource:', error);
+        return createFallbackVideo();
+      }
+    }).filter(Boolean); // Remove any null entries
   } catch (error) {
     console.error('Error fetching Cloudinary videos:', error);
     
@@ -125,6 +154,31 @@ export const fetchCloudinaryVideos = async (folder = '') => {
     console.log('Returning sample videos due to error');
     return getSampleVideos();
   }
+};
+
+// Function to create a fallback video in case of errors
+const createFallbackVideo = () => {
+  const now = new Date();
+  
+  return {
+    id: `fallback-${Date.now()}`,
+    publicId: 'samples/dog',
+    title: 'Fallback Video',
+    description: 'This is a fallback video when the original could not be processed',
+    likes: 42,
+    comments: 7,
+    url: FALLBACK_VIDEOS.default,
+    fallbackUrl: FALLBACK_VIDEOS.default,
+    thumbnail: `https://res.cloudinary.com/demo/video/upload/so_0.1/dog.jpg`,
+    format: 'mp4',
+    bytes: 5242880, // 5MB
+    duration: 30,
+    created_at: now.toISOString(),
+    width: 640,
+    height: 360,
+    tags: ['fallback'],
+    folder: 'samples'
+  };
 };
 
 // Function to get sample videos (fallback)
@@ -151,7 +205,10 @@ const getSampleVideos = () => {
       width: 1280,
       height: 720,
       tags: ['animals', 'wildlife'],
-      folder: 'samples'
+      folder: 'samples',
+      url: FALLBACK_VIDEOS.animals,
+      fallbackUrl: FALLBACK_VIDEOS.animals,
+      thumbnail: `https://res.cloudinary.com/demo/video/upload/so_0.1/elephants.jpg`,
     },
     {
       id: 'sample2',
@@ -167,7 +224,10 @@ const getSampleVideos = () => {
       width: 1280,
       height: 720,
       tags: ['nature', 'ocean'],
-      folder: 'samples'
+      folder: 'samples',
+      url: FALLBACK_VIDEOS.nature,
+      fallbackUrl: FALLBACK_VIDEOS.nature,
+      thumbnail: `https://res.cloudinary.com/demo/video/upload/so_0.1/sea_turtle.jpg`,
     },
     {
       id: 'sample3',
@@ -183,13 +243,12 @@ const getSampleVideos = () => {
       width: 1280,
       height: 720,
       tags: ['demo', 'sample'],
-      folder: 'samples'
+      folder: 'samples',
+      url: FALLBACK_VIDEOS.default,
+      fallbackUrl: FALLBACK_VIDEOS.default,
+      thumbnail: `https://res.cloudinary.com/demo/video/upload/so_0.1/dog.jpg`,
     }
   ];
   
-  return samples.map(video => ({
-    ...video,
-    url: getVideoUrl(video.publicId),
-    thumbnail: getVideoThumbnail(video.publicId)
-  }));
+  return samples;
 }; 

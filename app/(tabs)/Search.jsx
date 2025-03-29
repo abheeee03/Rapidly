@@ -8,6 +8,7 @@ const Search = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={{marginTop: 30}}>
       <Text style={[styles.title, { color: theme.text }]}>Search</Text>
       <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
         <Ionicons name="search" size={20} color={theme.textSecondary} />
@@ -15,7 +16,8 @@ const Search = () => {
           placeholder="Search for Authors, Topics, etc."
           placeholderTextColor={theme.textSecondary}
           style={[styles.input, { color: theme.text }]}
-        />
+          />
+          </View>
       </View>
     </View>
   )

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Switch } from 'react-native';
+import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView } from 'react-native';
 import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ const Account = () => {
   const { theme, isDarkMode, toggleTheme } = useTheme();
 
   return (
+    <SafeAreaView>
+
     <ScrollView 
       contentContainerStyle={[
         styles.container, 
@@ -28,17 +30,17 @@ const Account = () => {
         </View>
         <View style={styles.stat}>
           <Text style={[styles.statNumber, { color: theme.text }]}>125</Text>
-          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Liked News</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Saved News</Text>
         </View>
       </View>
       
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>History</Text>
         <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
-          <Text style={[styles.optionText, { color: theme.text }]}>Liked News</Text>
+          <Text style={[styles.optionText, { color: theme.text }]}>Saved News</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
-          <Text style={[styles.optionText, { color: theme.text }]}>Read Articles</Text>
+          <Text style={[styles.optionText, { color: theme.text }]}>Sved Articles</Text>
         </TouchableOpacity>
       </View>
       
@@ -81,6 +83,7 @@ const Account = () => {
         </TouchableOpacity>
       </View>
     </ScrollView>
+  </SafeAreaView>
   );
 };
 
@@ -92,6 +95,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   profileContainer: {
+    marginTop: 55,
     alignItems: 'center',
     marginBottom: 20,
   },
