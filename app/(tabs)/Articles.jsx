@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View, Dimensions, ActivityIndicator, TouchableOpacity, SafeAreaView, Platform } from 'react-native'
+import { StyleSheet, Text, View, Dimensions, ActivityIndicator, TouchableOpacity, SafeAreaView, Platform, ScrollView, Modal } from 'react-native'
 import React, { useEffect, useState, useRef } from 'react'
 import { useTheme } from '../../context/ThemeContext'
-import { Ionicons } from '@expo/vector-icons'
-import { collection, getDocs, query, orderBy, limit, startAfter } from 'firebase/firestore'
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'
+import { collection, getDocs, query, orderBy, limit, startAfter, where } from 'firebase/firestore'
 import { StatusBar } from 'expo-status-bar'
 import { db } from '../../Utlis/firebase'
 import { useLocalSearchParams, router } from 'expo-router'
@@ -15,12 +15,16 @@ const ARTICLES_PER_BATCH = 3 // Reduced for better initial load performance
 const Articles = () => {
   const { theme } = useTheme()
   const [articles, setArticles] = useState([])
+  const [allArticles, setAllArticles] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [lastDoc, setLastDoc] = useState(null)
   const [hasMoreArticles, setHasMoreArticles] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [categories, setCategories] = useState(['All', 'Politics', 'Technology', 'Health', 'Business', 'Entertainment', 'Sports'])
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
   const params = useLocalSearchParams() || {}
   const pagerRef = useRef(null)
   
@@ -33,6 +37,79 @@ const Articles = () => {
       // Cancel any pending operations if component unmounts
     }
   }, [])
+  
+  // Re-fetch articles when category changes (except for "All")
+  useEffect(() => {
+    if (!loading && selectedCategory !== 'All') {
+      fetchArticlesByCategory();
+    } else if (!loading && selectedCategory === 'All') {
+      // For "All" category, we can just show all articles we've already loaded
+      setArticles(allArticles);
+      setHasMoreArticles(true);
+      
+      // Reset current index
+      setCurrentIndex(0);
+      setTimeout(() => {
+        pagerRef.current?.setPage(0);
+      }, 100);
+    }
+  }, [selectedCategory]);
+
+  // Fetch articles filtered by category
+  const fetchArticlesByCategory = async () => {
+    try {
+      setLoading(true);
+      console.log(`Fetching articles for category: ${selectedCategory}`);
+      
+      const articlesRef = collection(db, 'articles');
+      const categoryQuery = query(
+        articlesRef,
+        where('category', '==', selectedCategory),
+        orderBy('createdAt', 'desc'),
+        limit(10) // Load more for categories since we're doing a direct query
+      );
+      
+      const querySnapshot = await getDocs(categoryQuery);
+      const articlesByCategoryData = [];
+      
+      if (!querySnapshot.empty) {
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          articlesByCategoryData.push({
+            id: doc.id,
+            title: data.title || 'Untitled Article',
+            description: data.description || '',
+            content: data.content || '',
+            coverImage: data.coverImage || 'https://via.placeholder.com/800x400?text=No+Image',
+            category: data.category || 'News',
+            createdAt: data.createdAt || new Date(),
+            likes: data.likes || 0,
+            views: data.views || 0
+          });
+        });
+        
+        setArticles(articlesByCategoryData);
+      } else {
+        // No articles found for this category
+        setArticles([]);
+      }
+      
+      // We're not doing pagination for category-specific views
+      setHasMoreArticles(false);
+      
+      // Reset current index
+      setCurrentIndex(0);
+      setTimeout(() => {
+        pagerRef.current?.setPage(0);
+      }, 100);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error(`Error fetching articles for category ${selectedCategory}:`, error);
+      setError("Couldn't load articles. Please check your connection.");
+      setLoading(false);
+    }
+  };
   
   // Restore position if coming back from article detail
   useEffect(() => {
@@ -49,11 +126,11 @@ const Articles = () => {
   
   // Check if we need to load more articles when approaching the end
   useEffect(() => {
-    if (articles.length > 0 && currentIndex >= articles.length - 2 && hasMoreArticles && !loadingMore) {
+    if (articles.length > 0 && currentIndex >= articles.length - 2 && hasMoreArticles && !loadingMore && selectedCategory === 'All') {
       console.log('Approaching end of loaded articles, loading more...')
       fetchMoreArticles()
     }
-  }, [currentIndex, articles, hasMoreArticles, loadingMore])
+  }, [currentIndex, articles, hasMoreArticles, loadingMore, selectedCategory])
   
   // Fetch articles from Firebase
   const fetchArticles = async (isInitialFetch = false) => {
@@ -144,20 +221,32 @@ const Articles = () => {
             views: 1875
           }
         ]
+        setAllArticles(sampleArticles)
         setArticles(sampleArticles)
         setHasMoreArticles(false)
       } else if (isInitialFetch) {
         console.log(`Successfully loaded ${articlesData.length} articles from Firestore`)
+        setAllArticles(articlesData)
         setArticles(articlesData)
       } else {
         console.log(`Loaded ${articlesData.length} more articles from Firestore`)
-        setArticles(prev => [...prev, ...articlesData])
+        setAllArticles(prev => [...prev, ...articlesData])
+        // If All is selected, also update the displayed articles
+        if (selectedCategory === 'All') {
+          setArticles(prev => [...prev, ...articlesData])
+        }
       }
       
       if (isInitialFetch) {
         setLoading(false)
       } else {
         setLoadingMore(false)
+      }
+
+      // Extract unique categories from articles
+      if (articlesData.length > 0) {
+        const uniqueCategories = ['All', ...new Set(articlesData.map(article => article.category))];
+        setCategories(uniqueCategories);
       }
     } catch (error) {
       console.error("Error fetching articles: ", error)
@@ -178,6 +267,7 @@ const Articles = () => {
             views: 1230
           }
         ]
+        setAllArticles(sampleArticles)
         setArticles(sampleArticles)
         setHasMoreArticles(false)
       }
@@ -192,7 +282,7 @@ const Articles = () => {
   
   // Fetch more articles for pagination
   const fetchMoreArticles = async () => {
-    if (!hasMoreArticles || loadingMore || !lastDoc) return
+    if (!hasMoreArticles || loadingMore || !lastDoc || selectedCategory !== 'All') return
     
     try {
       setLoadingMore(true)
@@ -229,7 +319,22 @@ const Articles = () => {
         setLastDoc(lastVisible)
         
         console.log(`Loaded ${articlesData.length} more articles from Firestore`)
-        setArticles(prev => [...prev, ...articlesData])
+        setAllArticles(prev => [...prev, ...articlesData])
+        // Only update displayed articles if All is selected
+        if (selectedCategory === 'All') {
+          setArticles(prev => [...prev, ...articlesData])
+        }
+        
+        // Extract and add new categories if any
+        if (articlesData.length > 0) {
+          const newCategories = articlesData
+            .map(article => article.category)
+            .filter(category => !categories.includes(category));
+            
+          if (newCategories.length > 0) {
+            setCategories(prev => [...prev, ...newCategories]);
+          }
+        }
       } else {
         console.log("No more articles to load")
         setHasMoreArticles(false)
@@ -242,6 +347,12 @@ const Articles = () => {
     }
   }
   
+  // Handle category selection
+  const handleCategorySelect = (category) => {
+    setSelectedCategory(category);
+    setShowCategoryModal(false);
+  };
+  
   // Handle page change event
   const handlePageChange = (event) => {
     const newIndex = event.nativeEvent.position;
@@ -251,7 +362,7 @@ const Articles = () => {
       setCurrentIndex(newIndex);
       
       // Check if we need to load more articles
-      if (articles.length > 0 && newIndex >= articles.length - 2 && hasMoreArticles && !loadingMore) {
+      if (articles.length > 0 && newIndex >= articles.length - 2 && hasMoreArticles && !loadingMore && selectedCategory === 'All') {
         console.log('Approaching end of loaded articles, loading more...')
         fetchMoreArticles()
       }
@@ -288,58 +399,117 @@ const Articles = () => {
     )
   }
   
-  if (articles.length === 0) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
-        <StatusBar style={theme.dark ? 'light' : 'dark'} />
-        <Ionicons name="newspaper-outline" size={64} color={theme.accent} />
-        <Text style={[styles.errorTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
-          No Articles Found
-        </Text>
-        <Text style={[styles.errorMessage, { color: theme.textSecondary, fontFamily: theme.font }]}>
-          Check back later for new articles
-        </Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => fetchArticles(true)}>
-          <Text style={[styles.retryText, { fontFamily: theme.font }]}>Refresh</Text>
-        </TouchableOpacity>
-      </View>
-    )
-  }
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
       
       <View style={styles.headerContainer}>
-        <Text style={[styles.headerTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
-          Latest News
-        </Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+            Latest News
+          </Text>
+          
+          {/* Category Dropdown Button */}
+          <TouchableOpacity 
+            style={[styles.categoryDropdown, { backgroundColor: theme.accent + '20' }]}
+            onPress={() => setShowCategoryModal(true)}
+          >
+            <Text style={[styles.selectedCategoryText, { color: theme.accent, fontFamily: theme.font }]}>
+              {selectedCategory}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={24} color={theme.accent} />
+          </TouchableOpacity>
+        </View>
+        <Text style={{color: theme.textSecondary, fontFamily: theme.font}}>Swipe to Change the News</Text>
       </View>
       
-      <View style={styles.cardContainer}>
-        {/* PagerView for smooth swiping */}
-        <PagerView
-          ref={pagerRef}
-          style={styles.pagerView}
-          initialPage={currentIndex}
-          onPageSelected={handlePageChange}
-          orientation="horizontal"
-          offscreenPageLimit={1}
-          pageMargin={10}
-          overdrag={true}
+      {/* Category Selection Modal */}
+      <Modal
+        visible={showCategoryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCategoryModal(false)}
         >
-          {articles.map((article, index) => (
-            <View key={article.id} style={styles.pageContainer}>
-              <ArticleCard
-                article={article}
-                globalIndex={index}
-                isLastInPage={index === articles.length - 2}
-                onEndReached={fetchMoreArticles}
-              />
-            </View>
-          ))}
-        </PagerView>
-      </View>
+          <View 
+            style={[
+              styles.categoryModalContent, 
+              { 
+                backgroundColor: theme.dark ? '#2c2c2c' : 'white',
+                top: Platform.OS === 'ios' ? 130 : 150, // Position under header
+                right: 20
+              }
+            ]}
+          >
+            {categories.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={[
+                  styles.categoryOption,
+                  selectedCategory === category && { backgroundColor: theme.accent + '20' }
+                ]}
+                onPress={() => handleCategorySelect(category)}
+              >
+                <Text
+                  style={[
+                    styles.categoryOptionText,
+                    { 
+                      fontFamily: theme.font,
+                      color: selectedCategory === category ? theme.accent : theme.text
+                    }
+                  ]}
+                >
+                  {category}
+                </Text>
+                {selectedCategory === category && (
+                  <Ionicons name="checkmark" size={18} color={theme.accent} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      
+      {articles.length === 0 ? (
+        <View style={styles.noArticlesContainer}>
+          <Ionicons name="newspaper-outline" size={64} color={theme.accent} />
+          <Text style={[styles.noArticlesTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+            No News for Selected Category
+          </Text>
+          <Text style={[styles.noArticlesMessage, { color: theme.textSecondary, fontFamily: theme.font }]}>
+            Try selecting a different category
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.cardContainer}>
+          {/* PagerView for smooth swiping */}
+          <PagerView
+            ref={pagerRef}
+            style={styles.pagerView}
+            initialPage={currentIndex}
+            onPageSelected={handlePageChange}
+            orientation="horizontal"
+            offscreenPageLimit={1}
+            pageMargin={10}
+            overdrag={true}
+          >
+            {articles.map((article, index) => (
+              <View key={article.id} style={styles.pageContainer}>
+                <ArticleCard
+                  article={article}
+                  globalIndex={index}
+                  isLastInPage={index === articles.length - 2}
+                  onEndReached={fetchMoreArticles}
+                />
+              </View>
+            ))}
+          </PagerView>
+        </View>
+      )}
       
       {loadingMore && (
         <View style={styles.loadingMoreContainer}>
@@ -360,14 +530,58 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    marginTop: Platform.OS === 'ios' ? 50 : 40,
+    marginTop: Platform.OS === 'ios' ? 50 : 80,
     paddingHorizontal: 20,
     paddingBottom: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 5,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  categoryDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  selectedCategoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  categoryModalContent: {
+    position: 'absolute',
+    width: 180,
+    borderRadius: 12,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  categoryOptionText: {
+    fontSize: 15,
   },
   cardContainer: {
     flex: 1,
@@ -432,5 +646,21 @@ const styles = StyleSheet.create({
   retryText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  noArticlesContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  noArticlesTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+  },
+  noArticlesMessage: {
+    fontSize: 16,
+    marginTop: 8,
+    textAlign: 'center',
   },
 })

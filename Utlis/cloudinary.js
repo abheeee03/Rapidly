@@ -71,6 +71,7 @@ export const fetchCloudinaryVideos = async (folder = '') => {
     // Set up query parameters
     const params = new URLSearchParams();
     params.append('max_results', 30); // Fetch up to 30 videos
+    params.append('type', 'upload'); // Add required type parameter
     
     // Add prefix parameter if folder is specified
     if (folder) {

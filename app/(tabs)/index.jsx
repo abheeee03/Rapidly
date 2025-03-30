@@ -1,10 +1,12 @@
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Dimensions, TouchableOpacity, Image, SafeAreaView } from 'react-native'
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Dimensions, TouchableOpacity, Image, SafeAreaView, Animated, TouchableWithoutFeedback } from 'react-native'
 import React, { useEffect, useState, useRef, memo, useCallback } from 'react'
-import { useEvent } from 'expo'
+import { useFocusEffect } from '@react-navigation/native'
 import { useVideoPlayer, VideoView } from 'expo-video'
 import { StatusBar } from 'expo-status-bar'
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons'
-import { fetchCloudinaryVideos } from '@/Utlis/cloudinary'
+import { Ionicons, FontAwesome5, MaterialCommunityIcons, AntDesign, MaterialIcons } from '@expo/vector-icons'
+import { db } from '../../Utlis/firebase'
+import { collection, getDocs, query, where, orderBy, limit, doc, getDoc, updateDoc, increment } from 'firebase/firestore'
+import { BlurView } from 'expo-blur'
 
 const { width, height } = Dimensions.get('window')
 
@@ -19,13 +21,33 @@ const VideoItem = memo(({
   likeCount, 
   handleLike,
   onVideoPlayerReady,
-  currentlyPlaying
+  currentlyPlaying,
+  togglePlayPause,
+  handleSave,
+  isSaved
 }) => {
   const [isReady, setIsReady] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const playerRef = useRef(null)
+  const fadeAnim = useRef(new Animated.Value(0)).current
+  const pauseIconAnim = useRef(new Animated.Value(0)).current
+  
+  // Fade in animation when video is current
+  useEffect(() => {
+    if (isCurrentVideo) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true
+      }).start()
+    } else {
+      fadeAnim.setValue(0)
+    }
+  }, [isCurrentVideo, fadeAnim])
   
   // Initialize video player
-  const player = useVideoPlayer(item.url, player => {
+  const player = useVideoPlayer(item.videoUrl, player => {
     if (player) {
       try {
         player.loop = true
@@ -51,7 +73,7 @@ const VideoItem = memo(({
     const controlPlayback = async () => {
       if (isReady && playerRef.current) {
         try {
-          if (isCurrentVideo && currentlyPlaying === index) {
+          if (isCurrentVideo && currentlyPlaying === index && !isPaused) {
             await playerRef.current.play().catch(err => {
               console.log(`Error playing video at index ${index}:`, err)
             })
@@ -67,7 +89,7 @@ const VideoItem = memo(({
     }
     
     controlPlayback()
-  }, [isCurrentVideo, currentlyPlaying, isReady, index])
+  }, [isCurrentVideo, currentlyPlaying, isReady, index, isPaused])
   
   // Update player mute state when global mute changes
   useEffect(() => {
@@ -80,6 +102,50 @@ const VideoItem = memo(({
     }
   }, [isMuted, isReady])
 
+  // Update paused state when toggle is called from parent
+  useEffect(() => {
+    if (isCurrentVideo && index === currentlyPlaying) {
+      setIsPaused(prevState => {
+        // Show pause icon animation when going from playing to paused
+        if (!prevState) {
+          showPauseIcon()
+        }
+        return !prevState
+      })
+    }
+  }, [togglePlayPause])
+  
+  // Show large pause icon when video is paused
+  const showPauseIcon = () => {
+    pauseIconAnim.setValue(1)
+    Animated.timing(pauseIconAnim, {
+      toValue: 0,
+      duration: 800,
+      useNativeDriver: true,
+    }).start()
+  }
+
+  // Handle tap on video area
+  const handleVideoPress = () => {
+    setIsPaused(prevState => {
+      const newPausedState = !prevState
+      
+      // Show pause icon animation when going from playing to paused
+      if (newPausedState) {
+        showPauseIcon()
+      }
+      
+      // Update playback state
+      if (newPausedState) {
+        playerRef.current?.pause().catch(err => {})
+      } else {
+        playerRef.current?.play().catch(err => {})
+      }
+      
+      return newPausedState
+    })
+  }
+  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -108,74 +174,109 @@ const VideoItem = memo(({
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
     return `${Math.floor(diffDays / 365)} years ago`
   }
+  
+  // Format date if available
+  const formattedDate = item?.createdAt ? formatDate(item.createdAt) : ''
 
   return (
     <View style={styles.videoContainer}>
       <StatusBar style="light" />
       
-      <View style={styles.videoWrapper}>
-        <VideoView 
-          style={styles.video} 
-          player={player}
-          allowsFullscreen
-          nativeControls={false}
+      {/* Video Player with tap gesture */}
+      <TouchableWithoutFeedback onPress={handleVideoPress}>
+        <View style={styles.videoWrapper}>
+          <VideoView 
+            style={styles.video} 
+            player={player}
+            allowsFullscreen
+            nativeControls={false}
+          />
           
-        />
-      </View>
-      
-      {/* User info at bottom */}
-      <View style={styles.userInfoContainer}>
-        {item.thumbnail && (
-          <Image 
-            source={{ uri: item.thumbnail }} 
-            style={styles.userAvatar} 
-            resizeMode="cover" 
-          />
-        )}
-        <View style={styles.userTextContainer}>
-          <Text style={styles.userName}>@CameronStewart</Text>
-          <Text style={styles.videoTitle}>{item.title || "Title of the News Will Appear Here...."}</Text>
+          {/* Large Pause Icon (fades in/out) */}
+          <Animated.View 
+            style={[
+              styles.pauseIconContainer,
+              { opacity: pauseIconAnim }
+            ]}
+          >
+            <Ionicons name="pause" size={80} color="white" />
+          </Animated.View>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
       
-      {/* Bottom action bar */}
-      <View style={styles.actionBar}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item.id)}>
-          <Ionicons
-            name={isLiked ? "heart" : "heart-outline"}
-            size={24}
-            color={isLiked ? "#FF4C54" : "white"}
+      {/* YouTube Shorts style action buttons on right side */}
+      <View style={styles.actionButtonsBar}>
+        <TouchableOpacity 
+          style={styles.actionButtonColumn} 
+          onPress={() => handleLike(item.id)}
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+        >
+          <AntDesign
+            name={isLiked ? "heart" : "hearto"}
+            size={28}
+            color={isLiked ? "red" : "white"}
           />
-          <Text style={styles.actionText}>Like</Text>
+          <Text style={styles.actionButtonText}>{likeCount}</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.actionButton}>
-          <FontAwesome5 name="comment" size={24} color="white" />
-          <Text style={styles.actionText}>{item.comments || 0}</Text>
+        <TouchableOpacity 
+          style={styles.actionButtonColumn}
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+        >
+          <Ionicons name="chatbubble-outline" size={26} color="white" />
+          <Text style={styles.actionButtonText}>{item.comments || 0}</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="share-outline" size={24} color="white" />
-          <Text style={styles.actionText}>Share</Text>
+        <TouchableOpacity 
+          style={styles.actionButtonColumn}
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+        >
+          <Ionicons name="arrow-redo-outline" size={26} color="white" />
+          <Text style={styles.actionButtonText}>Share</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="bookmark-outline" size={24} color="white" />
-          <Text style={styles.actionText}>Save</Text>
+        <TouchableOpacity 
+          style={styles.actionButtonColumn}
+          onPress={() => handleSave(item.id)}
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+        >
+          <MaterialIcons
+            name={isSaved ? "bookmark" : "bookmark-outline"}
+            size={28}
+            color={isSaved ? "#FFF" : "white"}
+          />
+          <Text style={styles.actionButtonText}>Save</Text>
         </TouchableOpacity>
       </View>
       
-      {/* Mute Button */}
-      <TouchableOpacity
-        style={styles.muteButton}
-        onPress={() => setIsMuted(!isMuted)}
-      >
-        <Ionicons
-          name={isMuted ? "volume-mute" : "volume-high"}
-          size={24}
-          color="white"
-        />
-      </TouchableOpacity>
+      {/* Video Author and Info at bottom */}
+      <View style={styles.videoInfoArea}>
+        <View style={styles.authorRow}>
+          <Text style={styles.authorName}>@{item?.uploadedBy || 'UptoDate'}</Text>
+        </View>
+        
+        <Text style={styles.videoTitle} numberOfLines={2}>
+          {item?.title || "Latest News Update"}
+        </Text>
+        
+        {item?.description && (
+          <Text style={styles.videoDescription} numberOfLines={2}>
+            {item.description}
+          </Text>
+        )}
+        
+        <TouchableOpacity
+          style={styles.muteButton}
+          onPress={() => setIsMuted(!isMuted)}
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+        >
+          <Ionicons
+            name={isMuted ? "volume-mute" : "volume-high"}
+            size={24}
+            color="white"
+          />
+        </TouchableOpacity>
+      </View>
     </View>
   )
 })
@@ -188,7 +289,10 @@ const HomeScreen = () => {
   const [isMuted, setIsMuted] = useState(false)
   const [likedVideos, setLikedVideos] = useState({})
   const [likeCounts, setLikeCounts] = useState({})
+  const [savedVideos, setSavedVideos] = useState({})
   const [currentlyPlaying, setCurrentlyPlaying] = useState(0)
+  const [togglePlayPause, setTogglePlayPause] = useState(false)
+  const [appIsActive, setAppIsActive] = useState(true)
   
   // Video players ref
   const videoPlayers = useRef({})
@@ -233,17 +337,37 @@ const HomeScreen = () => {
   const loadVideos = async () => {
     try {
       setLoading(true)
-      console.log('Fetching videos from Cloudinary...')
-      const videoData = await fetchCloudinaryVideos()
-      console.log(`Loaded ${videoData.length} videos`)
+      console.log('Fetching videos from Firebase shorts collection...')
       
-      if (videoData.length === 0) {
-        setError('No videos found. Please check your configuration.')
-      } else {
-        setVideos(videoData)
+      const shortsRef = collection(db, 'shorts')
+      const q = query(shortsRef, orderBy('createdAt', 'desc'), limit(20))
+      const querySnapshot = await getDocs(q)
+      
+      if (querySnapshot.empty) {
+        setError('No videos found in the shorts collection. Please add some content.')
+        setLoading(false)
+        return
       }
+      
+      const shortsData = querySnapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          videoUrl: data.videoUrl,
+          title: data.title || 'Untitled Video',
+          description: data.description || '',
+          uploadedBy: data.uploadedBy || 'UptoDate',
+          tags: data.tags || [],
+          likes: data.likes || 0,
+          comments: data.comments || 0,
+          createdAt: data.createdAt?.toDate() || new Date()
+        }
+      })
+      
+      console.log(`Loaded ${shortsData.length} videos from shorts collection`)
+      setVideos(shortsData)
     } catch (err) {
-      console.error('Error loading videos:', err)
+      console.error('Error loading videos from Firebase:', err)
       setError('Failed to load videos: ' + err.message)
     } finally {
       setLoading(false)
@@ -274,8 +398,9 @@ const HomeScreen = () => {
         setCurrentlyPlaying(index)
         
         // Force play the current video
-        if (videoPlayers.current[index]) {
-          videoPlayers.current[index].play().catch(err => {
+        const currentPlayer = videoPlayers.current[index];
+        if (currentPlayer && typeof currentPlayer.play === 'function') {
+          currentPlayer.play().catch(err => {
             console.log(`Error playing video at index ${index} after scroll:`, err)
           })
         }
@@ -283,7 +408,9 @@ const HomeScreen = () => {
         // Pause all other videos
         Object.entries(videoPlayers.current).forEach(([idx, player]) => {
           if (parseInt(idx) !== index && player && typeof player.pause === 'function') {
-            player.pause().catch(() => {})
+            player.pause().catch(err => {
+              console.log(`Error pausing other video at index ${idx}:`, err);
+            });
           }
         })
       }
@@ -293,21 +420,105 @@ const HomeScreen = () => {
   }, [])
 
   const handleLike = (videoId) => {
+    const isCurrentlyLiked = likedVideos[videoId] || false;
+    const newLikeState = !isCurrentlyLiked;
+    
+    // Update local state
     setLikedVideos(prev => ({
       ...prev,
-      [videoId]: !prev[videoId]
+      [videoId]: newLikeState
     }))
     
     setLikeCounts(prev => ({
       ...prev,
-      [videoId]: prev[videoId] + (likedVideos[videoId] ? -1 : 1)
+      [videoId]: prev[videoId] + (isCurrentlyLiked ? -1 : 1)
     }))
+    
+    // Update like count in Firebase
+    try {
+      const videoRef = doc(db, 'shorts', videoId);
+      const incrementValue = newLikeState ? 1 : -1;
+      
+      // Use Firebase's increment function to atomically update the likes field
+      const updateData = {
+        likes: increment(incrementValue)
+      };
+      
+      updateDoc(videoRef, updateData)
+        .catch(error => {
+          console.error('Error updating like count in Firebase:', error);
+          // Revert local state if Firebase update fails
+          setLikedVideos(prev => ({
+            ...prev,
+            [videoId]: isCurrentlyLiked
+          }));
+          setLikeCounts(prev => ({
+            ...prev,
+            [videoId]: prev[videoId] + (isCurrentlyLiked ? 1 : -1)
+          }));
+        });
+    } catch (error) {
+      console.error('Error preparing Firebase like update:', error);
+    }
+  }
+
+  // Handle video save
+  const handleSave = (videoId) => {
+    setSavedVideos(prev => ({
+      ...prev,
+      [videoId]: !prev[videoId]
+    }));
+    
+    // In a real app, you would save this to a user's Firebase profile
+    console.log(`Video ${savedVideos[videoId] ? 'unsaved' : 'saved'}: ${videoId}`);
+  };
+
+  // Handle app focus changes
+  useFocusEffect(
+    useCallback(() => {
+      // When screen comes into focus
+      setAppIsActive(true)
+      
+      // Play the current video if it was paused due to tab change
+      if (videoPlayers.current[currentlyPlaying]) {
+        try {
+          const player = videoPlayers.current[currentlyPlaying];
+          if (player && typeof player.play === 'function' && !togglePlayPause) {
+            player.play().catch(err => console.log('Error resuming video after focus:', err));
+          }
+        } catch (error) {
+          console.log('Error handling focus play:', error);
+        }
+      }
+      
+      return () => {
+        // When screen goes out of focus (user navigates away)
+        setAppIsActive(false)
+        
+        // Pause all videos
+        try {
+          Object.entries(videoPlayers.current).forEach(([idx, player]) => {
+            if (player && typeof player.pause === 'function') {
+              player.pause().catch(err => console.log(`Error pausing video ${idx} on blur:`, err));
+            }
+          });
+        } catch (error) {
+          console.log('Error pausing videos on blur:', error);
+        }
+      }
+    }, [currentlyPlaying, togglePlayPause])
+  )
+  
+  // Toggle play/pause
+  const handleTogglePlayPause = () => {
+    setTogglePlayPause(prev => !prev)
   }
 
   const renderVideo = useCallback(({ item, index }) => {
     const isCurrentVideo = index === currentIndex
     const isLiked = likedVideos[item.id] || false
     const likeCount = likeCounts[item.id] || 0
+    const isSaved = savedVideos[item.id] || false
     
     return (
       <VideoItem
@@ -322,16 +533,19 @@ const HomeScreen = () => {
         handleLike={handleLike}
         onVideoPlayerReady={handleVideoPlayerReady}
         currentlyPlaying={currentlyPlaying}
+        togglePlayPause={togglePlayPause}
+        handleSave={handleSave}
+        isSaved={isSaved}
       />
     )
-  }, [currentIndex, isMuted, likedVideos, likeCounts, currentlyPlaying, handleVideoPlayerReady])
+  }, [currentIndex, isMuted, likedVideos, likeCounts, savedVideos, currentlyPlaying, handleVideoPlayerReady, togglePlayPause])
 
   if (loading) {
     return (
       <View style={styles.centeredContainer}>
         <StatusBar style="light" />
         <ActivityIndicator size="large" color="#FFF" />
-        <Text style={styles.loadingText}>Loading videos...</Text>
+        <Text style={styles.loadingText}>Loading News...</Text>
       </View>
     )
   }
@@ -356,8 +570,12 @@ const HomeScreen = () => {
       
       {/* App Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>UptoDate</Text>
+        <Text style={styles.headerTitle}>UptoDate Shorts</Text>
       </View>
+      
+      <TouchableWithoutFeedback onPress={handleTogglePlayPause}>
+        <View style={styles.touchableOverlay} />
+      </TouchableWithoutFeedback>
       
       <FlatList
         ref={flatListRef}
@@ -432,64 +650,73 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  userInfoContainer: {
+  
+  // YouTube Shorts style action buttons
+  actionButtonsBar: {
+    zIndex: 100,
     position: 'absolute',
+    right: 10,
     bottom: 100,
-    left: 0,
+    alignItems: 'center',
+    width: 55, // Ensure enough width for the buttons
+  },
+  actionButtonColumn: {
+    alignItems: 'center',
+    marginBottom: 24,
+    padding: 5, // Add some padding for easier tapping
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 12,
+    marginTop: 3,
+    fontWeight: '600',
+  },
+  
+  // Video info area (at bottom)
+  videoInfoArea: {
+    position: 'absolute',
+    left: 15,
+    right: 70, // Leave space for action buttons
+    bottom: 30,
+  },
+  authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    marginBottom: 8,
   },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 12,
-    backgroundColor: '#333',
-  },
-  userTextContainer: {
-    flex: 1,
-  },
-  userName: {
+  authorName: {
     color: 'white',
-    fontWeight: 'bold',
     fontSize: 14,
+    fontWeight: 'bold',
   },
   videoTitle: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  videoDescription: {
+    color: 'rgba(255,255,255,0.9)',
     fontSize: 14,
-  },
-  actionBar: {
-    position: 'absolute',
-    bottom: 20,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  actionButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionText: {
-    color: 'white',
-    fontSize: 12,
-    marginTop: 4,
+    marginBottom: 10,
   },
   muteButton: {
     position: 'absolute',
-    bottom: 160,
-    right: 16,
+    right: -55,
+    bottom: 38,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    width: 40,
-    height: 40,
+    padding: 8,
     borderRadius: 20,
+  },
+  pauseIconContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   loadingText: {
     color: 'white',
@@ -518,5 +745,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  touchableOverlay: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 100, // Leave space for action buttons
+    bottom: 200,
+    zIndex: 5,
   },
 })

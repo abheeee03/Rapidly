@@ -342,17 +342,17 @@ const ListenNews = () => {
         
         {/* Play Button */}
         <TouchableOpacity
-          style={[styles.playButton, { backgroundColor: playing ? theme.error : theme.accent }]}
+          style={[styles.playButton, { backgroundColor: playing ? theme.accent : theme.accent }]}
           onPress={togglePlayback}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator size="large" color="#FFFFFF" />
+            <ActivityIndicator size="large" color={theme.text} />
           ) : (
             <Ionicons 
               name={playing ? "pause" : "play"} 
               size={64} 
-              color="#FFFFFF" 
+              color='white'
             />
           )}
         </TouchableOpacity>

@@ -109,9 +109,9 @@ const ArticleCard = ({ article, globalIndex, isLastInPage, onEndReached }) => {
             activeOpacity={0.8}
             >
             <Text style={[styles.viewDetailsText, { color: 'white', fontFamily: theme.font }]}>
-              Read More
+              Click Here to Know More
             </Text>
-            <Ionicons name="chevron-forward" size={20} color="white" />
+            {/* <Ionicons name="chevron-forward" size={20} color="white" /> */}
           </TouchableOpacity>
         </Link>
             
