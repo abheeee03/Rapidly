@@ -439,7 +439,7 @@ const Articles = () => {
             style={[
               styles.categoryModalContent, 
               { 
-                backgroundColor: theme.dark ? '#2c2c2c' : 'white',
+                backgroundColor: theme.background,
                 top: Platform.OS === 'ios' ? 130 : 150, // Position under header
                 right: 20
               }
