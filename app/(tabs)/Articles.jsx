@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Dimensions, ActivityIndicator, TouchableOpacity, SafeAreaView, Platform, ScrollView, Modal } from 'react-native'
+import { StyleSheet, Text, View, Dimensions, ActivityIndicator, TouchableOpacity, SafeAreaView, Platform, Modal, ScrollView } from 'react-native'
 import React, { useEffect, useState, useRef } from 'react'
 import { useTheme } from '../../context/ThemeContext'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
@@ -23,7 +23,24 @@ const Articles = () => {
   const [hasMoreArticles, setHasMoreArticles] = useState(true)
   const [error, setError] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState('All')
-  const [categories, setCategories] = useState(['All', 'Politics', 'Technology', 'Health', 'Business', 'Entertainment', 'Sports'])
+  const [categories, setCategories] = useState([
+    'All', 
+    'Politics', 
+    'Technology', 
+    'Health', 
+    'Business', 
+    'Entertainment', 
+    'Sports',
+    'Science',
+    'Education',
+    'World',
+    'Environment',
+    'Finance',
+    'Lifestyle',
+    'Travel',
+    'Food',
+    'Automotive'
+  ])
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const params = useLocalSearchParams() || {}
   const pagerRef = useRef(null)
@@ -243,10 +260,15 @@ const Articles = () => {
         setLoadingMore(false)
       }
 
-      // Extract unique categories from articles
+      // Extract unique categories from articles - add to preset categories
       if (articlesData.length > 0) {
-        const uniqueCategories = ['All', ...new Set(articlesData.map(article => article.category))];
-        setCategories(uniqueCategories);
+        const newCategories = articlesData
+          .map(article => article.category)
+          .filter(category => category && !categories.includes(category));
+          
+        if (newCategories.length > 0) {
+          setCategories(prev => [...prev, ...newCategories]);
+        }
       }
     } catch (error) {
       console.error("Error fetching articles: ", error)
@@ -441,35 +463,38 @@ const Articles = () => {
               { 
                 backgroundColor: theme.background,
                 top: Platform.OS === 'ios' ? 130 : 150, // Position under header
-                right: 20
+                right: 20,
+                maxHeight: height * 0.6, // Limit height to 60% of screen
               }
             ]}
           >
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.categoryOption,
-                  selectedCategory === category && { backgroundColor: theme.accent + '20' }
-                ]}
-                onPress={() => handleCategorySelect(category)}
-              >
-                <Text
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category}
                   style={[
-                    styles.categoryOptionText,
-                    { 
-                      fontFamily: theme.font,
-                      color: selectedCategory === category ? theme.accent : theme.text
-                    }
+                    styles.categoryOption,
+                    selectedCategory === category && { backgroundColor: theme.accent + '20' }
                   ]}
+                  onPress={() => handleCategorySelect(category)}
                 >
-                  {category}
-                </Text>
-                {selectedCategory === category && (
-                  <Ionicons name="checkmark" size={18} color={theme.accent} />
-                )}
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      { 
+                        fontFamily: theme.font,
+                        color: selectedCategory === category ? theme.accent : theme.text
+                      }
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                  {selectedCategory === category && (
+                    <Ionicons name="checkmark" size={18} color={theme.accent} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -570,6 +595,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    overflow: 'hidden',
   },
   categoryOption: {
     flexDirection: 'row',

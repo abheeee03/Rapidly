@@ -70,12 +70,6 @@ const Account = () => {
           <Text style={[styles.optionText, { color: theme.text }]}>My Account</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
-          <Text style={[styles.optionText, { color: theme.text }]}>Privacy Settings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
-          <Text style={[styles.optionText, { color: theme.text }]}>Offline Reading</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>
           <Text style={[styles.optionText, { color: theme.text }]}>About Us</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.option, { borderBottomColor: theme.border }]}>

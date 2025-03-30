@@ -1,10 +1,14 @@
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Animated } from 'react-native'
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, ScrollView, Image, FlatList, Dimensions, SafeAreaView, Platform, Animated } from 'react-native'
 import React, { useState, useEffect, useRef } from 'react'
 import { useTheme } from '../../context/ThemeContext'
 import { Audio } from 'expo-av'
-import { Ionicons, MaterialIcons } from '@expo/vector-icons'
-import { Picker } from '@react-native-picker/picker'
-import { BlurView } from 'expo-blur'
+import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons } from '@expo/vector-icons'
+import { StatusBar } from 'expo-status-bar'
+import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore'
+import { db } from '../../Utlis/firebase'
+import { useRouter } from 'expo-router'
+
+const { width, height } = Dimensions.get('window')
 
 const LANGUAGES = [
   { code: 'marathi', label: 'मराठी', fileName: 'latest_news_marathi' },
@@ -12,98 +16,183 @@ const LANGUAGES = [
   { code: 'english', label: 'English', fileName: 'latest_news_english' }
 ]
 
+// Cloudinary configuration
+const CLOUDINARY_CONFIG = {
+  cloudName: 'dvd9p28iu',
+  folderPaths: {
+    audio: 'top-news-audio',
+    banners: 'banners'
+  }
+}
+
+// Banner images from Cloudinary - using 5 random image indices
+const BANNER_IMAGES = [1, 2].map(index => 
+  `https://res.cloudinary.com/${CLOUDINARY_CONFIG.cloudName}/image/upload/v1/${CLOUDINARY_CONFIG.folderPaths.banners}/top-news-banner-${index}.jpg`
+)
+
+// Function to get a random banner image
+const getRandomBannerImage = () => {
+  const randomIndex = Math.floor(Math.random() * BANNER_IMAGES.length)
+  return BANNER_IMAGES[randomIndex]
+}
+
 const ListenNews = () => {
   const { theme } = useTheme()
+  const router = useRouter()
   const [sound, setSound] = useState(null)
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingArticles, setLoadingArticles] = useState(true)
   const [error, setError] = useState(null)
   const [todayDate, setTodayDate] = useState('')
   const [selectedLanguage, setSelectedLanguage] = useState('marathi')
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false)
-  const waveAnimation = useRef(new Animated.Value(0)).current
   const [languageFallbackMessage, setLanguageFallbackMessage] = useState('')
+  const [topArticles, setTopArticles] = useState([])
+  const [currentArticle, setCurrentArticle] = useState({
+    title: 'Two Pune Cops Face Dismissal Over Negligence in Fatal Porsche Crash Probe',
+    image: getRandomBannerImage(),
+    views: 0,
+  })
   
-  // Animation for the waves
-  const waveAnimationSequence = useRef()
+  const dropdownAnimation = useRef(new Animated.Value(0)).current
   
-  // Cloudinary configuration
-  const cloudName = 'dvd9p28iu' // From your Cloudinary config
-  const folderPath = 'top-news-audio'
-  
-  // Get the current audio file based on language
-  const getAudioFile = () => {
-    const language = LANGUAGES.find(lang => lang.code === selectedLanguage)
-    return language ? language.fileName : 'latest_news_marathi'
-  }
-  
-  // Get the audio URL
-  const getAudioUrl = (fileNameWithoutExt) => {
-    return `https://res.cloudinary.com/${cloudName}/video/upload/${folderPath}/${fileNameWithoutExt}.mp3`
-  }
-  
-  // Headline for the news based on language
-  const getHeadline = () => {
-    switch (selectedLanguage) {
-      case 'marathi':
-        return 'आजच्या टॉप बातम्या'
-      case 'hindi':
-        return 'आज की प्रमुख खबरें'
-      case 'english':
-        return 'Today\'s Top Headlines'
-      default:
-        return 'आजच्या टॉप बातम्या'
-    }
-  }
-
   // Format today's date
   useEffect(() => {
     const today = new Date()
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
     setTodayDate(today.toLocaleDateString('en-US', options))
   }, [])
-
+  
   // Cleanup sound when component unmounts
   useEffect(() => {
     return () => {
       if (sound) {
         sound.unloadAsync()
       }
-      // Clear any animations
-      if (waveAnimationSequence.current) {
-        waveAnimationSequence.current.stop()
-      }
     }
   }, [sound])
   
-  // Handle wave animation when playing changes
+  // Get the audio URL
+  const getAudioUrl = (fileNameWithoutExt) => {
+    return `https://res.cloudinary.com/${CLOUDINARY_CONFIG.cloudName}/video/upload/${CLOUDINARY_CONFIG.folderPaths.audio}/${fileNameWithoutExt}.mp3`
+  }
+  
+  // Fetch top articles from Firebase
   useEffect(() => {
-    if (playing) {
-      // Start animation sequence when playing
-      waveAnimationSequence.current = Animated.loop(
-        Animated.sequence([
-          Animated.timing(waveAnimation, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: false
-          }),
-          Animated.timing(waveAnimation, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: false
-          })
-        ])
+    fetchTopArticles()
+  }, [])
+  
+  const fetchTopArticles = async () => {
+    try {
+      setLoadingArticles(true)
+      setError(null)
+      
+      const articlesRef = collection(db, 'articles')
+      const topArticlesQuery = query(
+        articlesRef,
+        orderBy('views', 'desc'),
+        limit(5)
       )
-      waveAnimationSequence.current.start()
-    } else {
-      // Stop animation when not playing
-      if (waveAnimationSequence.current) {
-        waveAnimationSequence.current.stop()
+      
+      const querySnapshot = await getDocs(topArticlesQuery)
+      const articlesData = []
+      
+      if (!querySnapshot.empty) {
+        querySnapshot.forEach((doc) => {
+          const data = doc.data()
+          articlesData.push({
+            id: doc.id,
+            title: data.title || 'Untitled Article',
+            image: getRandomBannerImage(), // Use random banner image
+            views: data.views || 0,
+            content: data.content || '',
+            author: data.author || 'Unknown',
+            category: data.category || 'General'
+          })
+        })
+        
+        setTopArticles(articlesData)
+        
+        // Set the first article as current if we have results
+        if (articlesData.length > 0) {
+          setCurrentArticle(articlesData[0])
+        }
+      } else {
+        // If no articles, use sample data
+        const sampleArticles = [
+          {
+            id: '1',
+            title: "Two Pune Cops Face Dismissal Over Negligence in Fatal Porsche Crash Probe",
+            image: getRandomBannerImage(),
+            views: 245,
+            content: "Two police officers in Pune face dismissal following an investigation into their handling of a fatal Porsche crash case.",
+            author: "Rahul Sharma",
+            category: "Local News"
+          },
+          {
+            id: '2',
+            title: "Csk vs rcb",
+            image: getRandomBannerImage(),
+            views: 145,
+            content: "Chennai Super Kings faced Royal Challengers Bangalore in an exciting IPL match.",
+            author: "Vikram Singh",
+            category: "Sports"
+          },
+          {
+            id: '3',
+            title: "Chennai Super Kings vs Royal Challengers",
+            image: getRandomBannerImage(),
+            views: 95,
+            content: "The clash between Chennai Super Kings and Royal Challengers delivered excitement and drama.",
+            author: "Anand Kumar",
+            category: "Sports"
+          },
+          {
+            id: '4',
+            title: "Test News Number One",
+            image: getRandomBannerImage(),
+            views: 45,
+            content: "This is a test article to demonstrate the functionality of the news application.",
+            author: "Test Author",
+            category: "Technology"
+          }
+        ]
+        setTopArticles(sampleArticles)
+        setCurrentArticle(sampleArticles[0])
       }
-      // Reset to initial value
-      waveAnimation.setValue(0)
+      
+      setLoadingArticles(false)
+    } catch (error) {
+      console.error("Error fetching top articles:", error)
+      setError("Couldn't load articles. Please check your connection.")
+      setLoadingArticles(false)
+      
+      // Fallback to sample data
+      const sampleArticles = [
+        {
+          id: '1',
+          title: "Two Pune Cops Face Dismissal Over Negligence in Fatal Porsche Crash Probe",
+          image: getRandomBannerImage(),
+          views: 245,
+          content: "Two police officers in Pune face dismissal following an investigation.",
+          author: "Rahul Sharma",
+          category: "Local News"
+        },
+        {
+          id: '2',
+          title: "Csk vs rcb",
+          image: getRandomBannerImage(),
+          views: 145,
+          content: "Chennai Super Kings faced Royal Challengers Bangalore in an IPL match.",
+          author: "Vikram Singh",
+          category: "Sports"
+        }
+      ]
+      setTopArticles(sampleArticles)
+      setCurrentArticle(sampleArticles[0])
     }
-  }, [playing, waveAnimation])
+  }
 
   // Attempt to load audio with fallback to other languages if needed
   const loadAudio = async (languageCode = selectedLanguage, isRetry = false) => {
@@ -143,7 +232,7 @@ const ListenNews = () => {
         if (isRetry && languageCode !== selectedLanguage) {
           const originalLang = LANGUAGES.find(lang => lang.code === selectedLanguage)?.label
           const fallbackLang = selectedLang.label
-          setLanguageFallbackMessage(`Audio in ${originalLang} not available. Another Language instead.`)
+          setLanguageFallbackMessage(`Audio in ${originalLang} not available. Using ${fallbackLang} instead.`)
         }
         
         return true
@@ -206,7 +295,7 @@ const ListenNews = () => {
   const onPlaybackStatusUpdate = (status) => {
     if (status.didJustFinish) {
       // Restart the audio when it finishes
-      sound.replayAsync()
+      sound?.replayAsync()
     }
   }
 
@@ -218,13 +307,28 @@ const ListenNews = () => {
     }
   }
 
+  // Toggle language dropdown with animation
+  const toggleLanguageDropdown = () => {
+    const toValue = showLanguageDropdown ? 0 : 1
+    
+    Animated.spring(dropdownAnimation, {
+      toValue,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40
+    }).start()
+    
+    setShowLanguageDropdown(!showLanguageDropdown)
+  }
+
+  // Handle language selection
   const handleLanguageChange = async (language) => {
     if (playing) {
       await stopSound()
     }
     
     setSelectedLanguage(language)
-    setShowLanguageDropdown(false)
+    toggleLanguageDropdown()
     setLanguageFallbackMessage('')
     
     // Unload current audio
@@ -233,16 +337,43 @@ const ListenNews = () => {
       setSound(null)
     }
   }
-
-  const getWaveBaseHeight = (index) => {
-    // Create a pattern where middle bars are taller
-    const position = Math.abs(index - 5.5)
-    return 40 - position * 4
+  
+  const selectArticle = async (article) => {
+    // Stop audio playback if currently playing
+    if (playing) {
+      await stopSound()
+    }
+    
+    // Update current article
+    setCurrentArticle(article)
+    setPlaying(false)
+    
+    // Unload current audio
+    if (sound) {
+      await sound.unloadAsync()
+      setSound(null)
+    }
+    
+    // Navigate to ArticleDetail page with article data
+    router.push({
+      pathname: "/screens/ArticleDetail",
+      params: {
+        id: article.id,
+        title: article.title,
+        content: article.content || "",
+        image: article.image,
+        author: article.author || "Unknown",
+        views: article.views || 0,
+        category: article.category || "General",
+        date: article.createdAt ? new Date(article.createdAt).toISOString() : new Date().toISOString()
+      }
+    })
   }
 
   if (error) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <StatusBar style="light" />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline" size={64} color={theme.error} />
           <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>
@@ -253,117 +384,165 @@ const ListenNews = () => {
             <Text style={styles.retryText}>Try Again</Text>
           </TouchableOpacity>
         </View>
-      </View>
+    </View>
     )
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.content}>
-        {/* Date Display */}
-        <Text style={[styles.dateText, { color: theme.textSecondary }]}>
-          {todayDate}
-        </Text>
-        
-        {/* Language Selector */}
-        <View style={styles.languageContainer}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style="light" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, {color: theme.text}]}>Listen to Top News</Text>
+        <Text style={[styles.headerSubtitle, {color: theme.text}]}>All Top News Of The Day</Text>
+      </View>
+      
+      {/* Main Content */}
+
+      {/* Language Selector */}
+      <View style={styles.languageContainer}>
+        <View style={styles.languageSelectorRow}>
+          <Text style={[styles.languageLabel, {color: theme.text}]}>Audio Language</Text>
           <TouchableOpacity 
-            style={[styles.languageSelector, { borderColor: theme.border }]}
-            onPress={() => setShowLanguageDropdown(!showLanguageDropdown)}
+            style={[styles.languageSelector, { backgroundColor: showLanguageDropdown ? 'rgba(0, 122, 255, 0.1)' : 'transparent', borderColor: showLanguageDropdown ? theme.accent : theme.border }]}
+            onPress={toggleLanguageDropdown}
+            activeOpacity={0.7}
           >
-            <Text style={[styles.languageText, { color: theme.text }]}>
-              {LANGUAGES.find(lang => lang.code === selectedLanguage)?.label}
-            </Text>
+            <View style={styles.languageRow}>
+              <MaterialCommunityIcons name="translate" size={18} color={theme.accent} style={{marginRight: 8}} />
+              <Text style={[styles.languageText, {color: theme.text}]}>
+                {LANGUAGES.find(lang => lang.code === selectedLanguage)?.label}
+              </Text>
+            </View>
             <MaterialIcons 
-              name={showLanguageDropdown ? "arrow-drop-up" : "arrow-drop-down"} 
-              size={24} 
+              name={showLanguageDropdown ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
+              size={22} 
               color={theme.text} 
             />
           </TouchableOpacity>
-          
-          {showLanguageDropdown && (
-            <View style={[styles.dropdown, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-              {LANGUAGES.map(language => (
-                <TouchableOpacity
-                  key={language.code}
-                  style={[
-                    styles.dropdownItem,
-                    selectedLanguage === language.code && { backgroundColor: theme.accentLight }
-                  ]}
-                  onPress={() => handleLanguageChange(language.code)}
-                >
-                  <Text style={[styles.dropdownText, { color: theme.text }]}>
-                    {language.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
         </View>
         
-        {/* Fallback Message */}
+        <Animated.View style={[
+          styles.dropdownContainer,
+          {
+            opacity: dropdownAnimation,
+            transform: [{ 
+              scaleY: dropdownAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.8, 1]
+              })
+            }],
+            display: showLanguageDropdown ? 'flex' : 'none'
+          }
+        ]}>
+          <View style={[styles.dropdown, {
+            backgroundColor: theme.cardBackground || '#1E1E1E',
+            borderColor: theme.border || '#333333'
+          }]}>
+            {LANGUAGES.map(language => (
+              <TouchableOpacity
+                key={language.code}
+                style={[
+                  styles.dropdownItem,
+                  { borderBottomColor: theme.border || '#333333' },
+                  selectedLanguage === language.code && [styles.selectedDropdownItem, { backgroundColor: 'rgba(0, 122, 255, 0.1)' }]
+                ]}
+                onPress={() => handleLanguageChange(language.code)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.languageOptionRow}>
+                  {selectedLanguage === language.code && (
+                    <View style={[styles.activeDot, { backgroundColor: theme.accent || '#007AFF' }]} />
+                  )}
+                  <Text style={[
+                    styles.dropdownText, 
+                    {color: theme.text},
+                    selectedLanguage === language.code && styles.selectedLanguageText
+                  ]}>
+                    {language.label}
+                  </Text>
+                </View>
+                {selectedLanguage === language.code && (
+                  <Ionicons name="checkmark" size={18} color={theme.accent || '#007AFF'} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Animated.View>
+      </View>
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Current Article Card */}
+        <View style={[styles.currentArticleCard, {backgroundColor: theme.cardBackground}]}>
+          <View style={styles.imageContainer}>
+            <Image 
+              source={{ uri: currentArticle.image }} 
+              style={[styles.articleImage, {backgroundColor: theme.background}]}
+              resizeMode="cover"
+            />
+            
+            {/* Play Button */}
+            <TouchableOpacity
+              style={[styles.playButton, {backgroundColor: theme.accent}]}
+              onPress={togglePlayback}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="large" color={theme.text} />
+              ) : (
+                <Ionicons 
+                  name={playing ? "pause" : "play"} 
+                  size={32} 
+                  color='white'
+                />
+              )}
+            </TouchableOpacity>
+          <View style={[styles.readyToPlayContainer]}>
+            <Text style={[styles.readyToPlay, {color: theme.text, fontFamily: theme.font}]}>Click Here to {playing ? 'Pause' : 'Play'}</Text>
+          </View>
+          </View>
+          </View>
+          
+        
+        {/* Status Message */}
         {languageFallbackMessage ? (
-          <View style={styles.fallbackMessageContainer}>
-            <Text style={[styles.fallbackMessageText, { color: theme.text }]}>
+          <View style={[styles.fallbackMessageContainer, {backgroundColor: theme.background}]}>
+            <Ionicons name="alert-circle-outline" size={18} color={theme.text} style={{marginRight: 8}} />
+            <Text style={[styles.fallbackMessageText, {color: theme.text}]}>
               {languageFallbackMessage}
             </Text>
           </View>
         ) : null}
         
-        {/* Headline */}
-        <Text style={[styles.headline, { color: theme.text }]}>
-          {getHeadline()}
-        </Text>
-        
-        {/* Audio Wave Animation */}
-        <View style={styles.waveContainer}>
-          {[...Array(12)].map((_, index) => {
-            const baseHeight = getWaveBaseHeight(index)
-            const height = waveAnimation.interpolate({
-              inputRange: [0, 1],
-              outputRange: [baseHeight, baseHeight + 20 + Math.random() * 20]
-            })
-            
-            return (
-              <Animated.View 
-                key={index} 
-                style={[
-                  styles.waveLine, 
-                  { 
-                    height,
-                    backgroundColor: playing ? theme.accent : theme.border,
-                    marginHorizontal: 3
-                  }
-                ]} 
-              />
-            )
-          })}
-        </View>
-        
-        {/* Play Button */}
-        <TouchableOpacity
-          style={[styles.playButton, { backgroundColor: playing ? theme.accent : theme.accent }]}
-          onPress={togglePlayback}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="large" color={theme.text} />
+        {/* Top Articles Section */}
+        <View style={styles.topArticlesSection}>
+          <Text style={[styles.topArticlesTitle, {color: theme.text}]}>Other Top Articles:</Text>
+          
+          {loadingArticles ? (
+            <View style={styles.loadingArticles}>
+              <ActivityIndicator size="small" color={theme.text} />
+              <Text style={[styles.loadingArticlesText, {color: theme.text}]}>Loading articles...</Text>
+            </View>
           ) : (
-            <Ionicons 
-              name={playing ? "pause" : "play"} 
-              size={64} 
-              color='white'
-            />
+            <View style={[styles.articlesList, {backgroundColor: theme.background}]}>
+              {topArticles.map((article, index) => (
+                <TouchableOpacity 
+                  key={article.id} 
+                  style={[
+                    styles.articleItem
+                  ]}
+                  onPress={() => selectArticle(article)}
+                >
+                  <Text style={[styles.articleTitle, {color: theme.text}]}>{article.title}</Text>
+                  <Text style={[styles.articleViews, {color: theme.text}]}>{article.views} views</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
-        </TouchableOpacity>
-        
-        {/* Status Text */}
-        <Text style={[styles.statusText, { color: theme.textSecondary }]}>
-          {loading ? 'Loading audio...' : playing ? 'Now Playing' : 'Press Play to Listen'}
-        </Text>
-        
-      </View>
-    </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   )
 }
 
@@ -373,126 +552,204 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+  header: {
+    marginTop: 25,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 20 : 40,
+    paddingBottom: 15,
   },
-  dateText: {
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+    fontFamily: 'Inter-Bold',
+  },
+  headerSubtitle: {
     fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    marginBottom: 10,
+    color: '#999999',
+    marginTop: 5,
+    fontFamily: 'Inter-Regular',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  currentArticleCard: {
+    marginHorizontal: 20,
+    marginTop: 15,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  imageContainer: {
+    // position: 'relative',
+    width: '100%',
+  },
+  articleImage: {
+    width: '100%',
+    height: 200,
+  },
+  readyToPlayContainer: {
+    padding: 15,
+  },
+  readyToPlay: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#999999',
+    marginBottom: 8,
+  },
+  playButton: {
+    margin: 10,
+    // position: 'absolute',
+    bottom: -8,
+    alignSelf: 'center',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   languageContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 10,
+    marginHorizontal: 20,
+    marginVertical: 15,
     zIndex: 10,
+  },
+  languageSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  languageLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Inter-Medium',
   },
   languageSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 25,
-    borderWidth: 1,
-    width: 140,
-  },
-  languageText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-  },
-  dropdown: {
-    position: 'absolute',
-    top: 45,
-    width: 140,
     borderRadius: 8,
     borderWidth: 1,
-    overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
+    minWidth: 130,
   },
-  dropdownItem: {
-    padding: 12,
+  languageRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
+  languageText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+  },
+  dropdownContainer: {
+    position: 'absolute',
+    top: 45,
+    right: 0,
+    zIndex: 20,
+    width: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  dropdown: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+  },
+  languageOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  selectedDropdownItem: {
+    backgroundColor: 'rgba(0, 122, 255, 0.08)',
+  },
   dropdownText: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter-Regular',
   },
+  selectedLanguageText: {
+    fontFamily: 'Inter-Medium',
+    fontWeight: '600',
+  },
   fallbackMessageContainer: {
-    marginBottom: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255, 204, 0, 0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 15,
+    padding: 12,
+    backgroundColor: 'rgba(255, 204, 0, 0.1)',
     borderRadius: 8,
   },
   fallbackMessageText: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    textAlign: 'center',
+    color: '#FFC107',
+    fontFamily: 'Inter-Regular',
   },
-  headline: {
-    fontSize: 28,
-    fontFamily: 'Inter-Bold',
-    textAlign: 'center',
-    marginBottom: 40,
-  },
-  waveContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    height: 80,
-    marginBottom: 40,
-  },
-  waveLine: {
-    width: 6,
-    borderRadius: 8,
-  },
-  playButton: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+  topArticlesSection: {
+    marginHorizontal: 20,
+    marginTop: 30,
     marginBottom: 30,
   },
-  statusText: {
-    fontSize: 18,
-    fontFamily: 'Inter-Medium',
-    marginBottom: 20,
+  topArticlesTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 15,
+    fontFamily: 'Inter-Bold',
   },
-  infoBlur: {
-    borderRadius: 16,
-    padding: 16,
-    width: '100%',
-    marginTop: 10,
+  articlesList: {
+    // borderTopWidth: 1,
+    borderTopColor: '#333333',
   },
-  infoText: {
-    fontSize: 14,
+  articleItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  selectedArticleItem: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+  },
+  articleTitle: {
+    fontSize: 16,
+    color: 'white',
     fontFamily: 'Inter-Regular',
-    textAlign: 'center',
-    opacity: 0.8,
   },
-  loadingContainer: {
-    flex: 1,
+  articleViews: {
+    fontSize: 14,
+    color: '#999999',
+    marginTop: 5,
+    fontFamily: 'Inter-Regular',
+  },
+  loadingArticles: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 20,
   },
-  loadingText: {
-    fontSize: 16,
+  loadingArticlesText: {
+    fontSize: 14,
+    color: '#999999',
+    marginLeft: 10,
     fontFamily: 'Inter-Regular',
-    marginTop: 20,
   },
   errorContainer: {
     flex: 1,
@@ -508,9 +765,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   retryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    borderRadius: 30,
+    elevation: 3,
   },
   retryText: {
     color: '#FFFFFF',
