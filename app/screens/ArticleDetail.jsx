@@ -1,15 +1,22 @@
-import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native'
-import React from 'react'
+import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, SafeAreaView, Dimensions, Alert } from 'react-native'
+import React, { useState, useEffect } from 'react'
 import { useTheme } from '../../context/ThemeContext'
+import { useAuth } from '../../context/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import { db } from '../../Utlis/firebase'
+import { collection, addDoc, query, where, getDocs, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 
 const { width, height } = Dimensions.get('window')
 
 const ArticleDetail = () => {
   const { theme } = useTheme()
+  const { user } = useAuth()
   const params = useLocalSearchParams() || {}
+  const [isSaved, setIsSaved] = useState(false)
+  const [savedDocId, setSavedDocId] = useState(null)
+  const [loading, setLoading] = useState(true)
   
   // Parse article data from params with null checks
   const article = {
@@ -24,6 +31,71 @@ const ArticleDetail = () => {
     views: parseInt(params.views || '0'),
     sourceIndex: params.sourceIndex
   }
+  
+  // Check if article is saved on component mount
+  useEffect(() => {
+    if (user && article.id !== 'unknown') {
+      checkIfArticleSaved();
+    } else {
+      setLoading(false);
+    }
+  }, [user, article.id]);
+
+  // Check if article is already saved by this user
+  const checkIfArticleSaved = async () => {
+    try {
+      if (!user) return;
+      
+      const savedArticlesRef = collection(db, 'users', user.uid, 'savedArticles');
+      const q = query(savedArticlesRef, where('articleId', '==', article.id));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        setIsSaved(true);
+        setSavedDocId(querySnapshot.docs[0].id);
+      }
+    } catch (error) {
+      console.error('Error checking if article is saved:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle save/unsave article
+  const handleSaveArticle = async () => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to save articles');
+      return;
+    }
+
+    try {
+      if (isSaved) {
+        // Unsave article
+        await deleteDoc(doc(db, 'users', user.uid, 'savedArticles', savedDocId));
+        setIsSaved(false);
+        setSavedDocId(null);
+        Alert.alert('Unsaved', 'Article has been removed from your saved collection');
+      } else {
+        // Save article
+        const savedArticlesRef = collection(db, 'users', user.uid, 'savedArticles');
+        const docRef = await addDoc(savedArticlesRef, {
+          articleId: article.id,
+          title: article.title,
+          description: article.description,
+          coverImage: article.coverImage,
+          category: article.category,
+          savedAt: serverTimestamp()
+        });
+        
+        setIsSaved(true);
+        setSavedDocId(docRef.id);
+        Alert.alert('Saved', 'Article has been saved to your collection');
+      }
+    } catch (error) {
+      console.error('Error saving/unsaving article:', error);
+      Alert.alert('Error', 'Failed to save article. Please try again.');
+    }
+  };
   
   // Calculate display date with error handling
   const displayDate = params.createdAt ? 
@@ -69,6 +141,19 @@ const ArticleDetail = () => {
           >
             <Ionicons name="chevron-back" size={24} color="white" />
           </TouchableOpacity>
+
+          {/* Save Button */}
+          <TouchableOpacity 
+            style={styles.saveButton}
+            onPress={handleSaveArticle}
+            disabled={loading}
+          >
+            <Ionicons 
+              name={isSaved ? "bookmark" : "bookmark-outline"} 
+              size={24} 
+              color="white" 
+            />
+          </TouchableOpacity>
         </View>
         
         {/* Article Content */}
@@ -79,7 +164,7 @@ const ArticleDetail = () => {
           </Text>
           
           {/* Title */}
-          <Text style={[styles.title, { color: theme.text, fontFamily: theme.font }]}>
+          <Text style={[styles.title, { color: theme.text, fontFamily: theme.titleFont }]}>
             {article.title}
           </Text>
           
@@ -103,6 +188,30 @@ const ArticleDetail = () => {
                 {article.views}
               </Text>
             </View>
+
+            {/* Save Button for Text */}
+            <TouchableOpacity 
+              style={styles.saveStatItem} 
+              onPress={handleSaveArticle}
+              disabled={loading}
+            >
+              <Ionicons 
+                name={isSaved ? "bookmark" : "bookmark-outline"} 
+                size={20} 
+                color={isSaved ? theme.accent : theme.textSecondary} 
+              />
+              <Text 
+                style={[
+                  styles.statText, 
+                  { 
+                    color: isSaved ? theme.accent : theme.textSecondary, 
+                    fontFamily: theme.font 
+                  }
+                ]}
+              >
+                {isSaved ? 'Saved' : 'Save'}
+              </Text>
+            </TouchableOpacity>
           </View>
           
           {/* Article Body */}
@@ -148,6 +257,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 10,
   },
+  saveButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
   contentContainer: {
     padding: 20,
   },
@@ -173,6 +294,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 20,
+  },
+  saveStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+    marginLeft: 'auto',
   },
   statText: {
     marginLeft: 5,

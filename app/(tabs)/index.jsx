@@ -9,6 +9,7 @@ import { collection, getDocs, query, where, orderBy, limit, doc, getDoc, updateD
 import { BlurView } from 'expo-blur'
 import CommentsModal from '../components/CommentsModal'
 import {useTheme} from '../../context/ThemeContext'
+import { router } from 'expo-router'
 
 const { width, height } = Dimensions.get('window')
 
@@ -501,7 +502,7 @@ const EndOfContentScreen = ({ onExploreArticles }) => {
       </Text>
       <TouchableOpacity 
         style={[styles.exploreArticlesButton, { backgroundColor: theme.accent }]}
-        onPress={()=>router.push('/articles')}
+        onPress={()=>router.push('/(tabs)/Articles')}
       >
         <Text style={[styles.exploreArticlesButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>
           Explore Articles
@@ -762,10 +763,7 @@ const HomeScreen = () => {
       });
 
       // Show feedback
-      Alert.alert(
-        newLikeState ? 'Liked' : 'Unliked',
-        newLikeState ? 'Short has been added to your likes' : 'Short has been removed from your likes'
-      );
+      
     } catch (error) {
       console.error('Error updating like:', error);
       // Revert local state

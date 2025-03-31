@@ -384,7 +384,8 @@ export default function SignUp() {
               />
             </TouchableOpacity>
             <Text style={styles.termsText}>
-              I agree to the <Text style={styles.termsLink}>Terms</Text> and <Text style={styles.termsLink}>Privacy Policy</Text>
+              I agree to the <Link href='https://uptodate-app.vercel.app/TermsConditions'>
+              <Text style={styles.termsLink}>Terms and Conditions</Text></Link>
             </Text>
           </View>
 

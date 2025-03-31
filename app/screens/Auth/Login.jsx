@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -59,9 +59,7 @@ export default function Login() {
     }
   };
 
-  const handleForgotPassword = () => {
-    router.push('/screens/Auth/ForgotPassword');
-  };
+  
 
   return (
     <View style={styles.container}>
@@ -91,9 +89,9 @@ export default function Login() {
 
         <View style={styles.passwordContainer}>
           <Text style={styles.label}>Password</Text>
-          <TouchableOpacity onPress={handleForgotPassword}>
+          <Link href='https://uptodate-app.vercel.app/ResetPassword'>
             <Text style={styles.forgotPassword}>Forgot password?</Text>
-          </TouchableOpacity>
+          </Link>
         </View>
         
         <View style={styles.passwordInputContainer}>

@@ -1,17 +1,30 @@
-import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, Image, SafeAreaView, Alert, ActivityIndicator, Modal, FlatList } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../Utlis/firebase';
 import { useAuth } from '../../context/AuthContext';
-import CityAutocomplete from '../../components/CityAutocomplete';
 
 const NEWS_CATEGORIES = [
   'Politics', 'Technology', 'Health', 'Business', 
   'Entertainment', 'Sports', 'Science', 'Education',
   'World', 'Environment', 'Finance', 'Lifestyle'
+];
+
+// Sample city data - Indian cities only
+const CITIES = [
+  'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 
+  'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow',
+  'Kanpur', 'Nagpur', 'Indore', 'Thane', 'Bhopal',
+  'Visakhapatnam', 'Patna', 'Vadodara', 'Ghaziabad', 'Ludhiana',
+  'Agra', 'Nashik', 'Faridabad', 'Meerut', 'Rajkot',
+  'Varanasi', 'Srinagar', 'Aurangabad', 'Dhanbad', 'Amritsar',
+  'Navi Mumbai', 'Allahabad', 'Ranchi', 'Howrah', 'Coimbatore',
+  'Jabalpur', 'Gwalior', 'Vijayawada', 'Jodhpur', 'Madurai',
+  'Raipur', 'Kochi', 'Chandigarh', 'Mysore', 'Guwahati',
+  'Puducherry', 'Thiruvananthapuram', 'Surat', 'Shimla', 'Dehradun'
 ];
 
 const MyAccount = () => {
@@ -31,6 +44,11 @@ const MyAccount = () => {
     preferences: []
   });
 
+  // City selection modal states
+  const [cityModalVisible, setCityModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredCities, setFilteredCities] = useState(CITIES);
+
   // Load user data when component mounts
   useEffect(() => {
     if (!authLoading && user) {
@@ -48,6 +66,19 @@ const MyAccount = () => {
       router.replace('/screens/Auth/Login');
     }
   }, [user, authLoading]);
+
+  // Filter cities based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredCities(CITIES);
+    } else {
+      const query = searchQuery.toLowerCase().trim();
+      const filtered = CITIES.filter(city => 
+        city.toLowerCase().includes(query)
+      );
+      setFilteredCities(filtered);
+    }
+  }, [searchQuery]);
 
   const handleInputChange = (field, value) => {
     setProfile(prev => ({
@@ -76,9 +107,18 @@ const MyAccount = () => {
     });
   };
 
+  // Open city selection modal
+  const openCityModal = () => {
+    setSearchQuery('');
+    setFilteredCities(CITIES);
+    setCityModalVisible(true);
+  };
 
- 
-
+  // Handle city selection
+  const handleCitySelect = (city) => {
+    handleInputChange('city', city);
+    setCityModalVisible(false);
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -140,11 +180,100 @@ const MyAccount = () => {
     );
   };
 
+  // Render city modal
+  const renderCityModal = () => (
+    <Modal
+      visible={cityModalVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setCityModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+              Select City
+            </Text>
+            <TouchableOpacity 
+              onPress={() => setCityModalVisible(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={[styles.searchContainer, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
+            <Ionicons name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text, fontFamily: theme.font }]}
+              placeholder="Search for a city..."
+              placeholderTextColor={theme.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          {filteredCities.length === 0 ? (
+            <View style={styles.noResultsContainer}>
+              <Ionicons name="location-outline" size={48} color={theme.textSecondary} />
+              <Text style={[styles.noResultsText, { color: theme.textSecondary, fontFamily: theme.font }]}>
+                No cities found matching "{searchQuery}"
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredCities}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.cityItem, 
+                    { borderBottomColor: theme.border },
+                    profile.city === item && { backgroundColor: theme.accent + '15' }
+                  ]}
+                  onPress={() => handleCitySelect(item)}
+                >
+                  <View style={styles.cityItemContent}>
+                    <Ionicons 
+                      name="location-outline" 
+                      size={20} 
+                      color={profile.city === item ? theme.accent : theme.textSecondary} 
+                      style={styles.cityIcon}
+                    />
+                    <Text style={[
+                      styles.cityName, 
+                      { 
+                        color: profile.city === item ? theme.accent : theme.text,
+                        fontFamily: theme.font 
+                      }
+                    ]}>
+                      {item}
+                    </Text>
+                  </View>
+                  {profile.city === item && (
+                    <Ionicons name="checkmark-circle" size={20} color={theme.accent} />
+                  )}
+                </TouchableOpacity>
+              )}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (authLoading || isLoading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
         <ActivityIndicator size="large" color={theme.accent} />
-        <Text style={[styles.loadingText, { color: theme.text }]}>Loading profile...</Text>
+        <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading profile...</Text>
       </View>
     );
   }
@@ -158,7 +287,7 @@ const MyAccount = () => {
         >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>My Account</Text>
+        <Text style={[styles.headerTitle, { color: theme.text, fontFamily: theme.titleFont }]}>My Account</Text>
         <TouchableOpacity 
           style={[styles.saveButton, isSaving && styles.saveButtonDisabled]} 
           onPress={handleSave}
@@ -167,7 +296,7 @@ const MyAccount = () => {
           {isSaving ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={[styles.saveButtonText, { fontFamily: theme.font }]}>Save</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -185,9 +314,9 @@ const MyAccount = () => {
 
         <View style={styles.formSection}>
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Name</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary, fontFamily: theme.font }]}>Name</Text>
             <TextInput
-              style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+              style={[styles.input, { borderColor: theme.border, color: theme.text, fontFamily: theme.font }]}
               value={profile.name}
               onChangeText={(text) => handleInputChange('name', text)}
               placeholder="Your full name"
@@ -196,47 +325,62 @@ const MyAccount = () => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Email</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary, fontFamily: theme.font }]}>Email</Text>
             <TextInput
-              style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.inputDisabled }]}
+              style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.inputDisabled, fontFamily: theme.font }]}
               value={profile.email}
               editable={false}
               placeholder="Your email"
               placeholderTextColor={theme.textSecondary}
             />
-            <Text style={[styles.emailNote, { color: theme.textSecondary }]}>
+            <Text style={[styles.emailNote, { color: theme.textSecondary, fontFamily: theme.font }]}>
               Email cannot be changed
             </Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Phone Number</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary, fontFamily: theme.font }]}>Phone Number</Text>
             <TextInput
-              style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.inputDisabled }]}
+              style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.inputDisabled, fontFamily: theme.font }]}
               value={profile.phone}
               editable={false}
               placeholder="Your phone number"
               placeholderTextColor={theme.textSecondary}
               keyboardType="phone-pad"
             />
-            <Text style={[styles.emailNote, { color: theme.textSecondary }]}>
+            <Text style={[styles.emailNote, { color: theme.textSecondary, fontFamily: theme.font }]}>
               Phone number cannot be changed
             </Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>City</Text>
-            <CityAutocomplete
-              value={profile.city}
-              onSelectCity={(city) => handleInputChange('city', city)}
-              style={styles.cityAutocomplete}
-            />
+            <Text style={[styles.inputLabel, { color: theme.textSecondary, fontFamily: theme.font }]}>City</Text>
+            <TouchableOpacity 
+              style={[styles.citySelector, { borderColor: theme.border, backgroundColor: theme.cardBackground }]}
+              onPress={openCityModal}
+            >
+              <View style={styles.citySelectorContent}>
+                <Ionicons name="location-outline" size={20} color={theme.textSecondary} style={styles.cityIcon} />
+                <Text 
+                  style={[
+                    styles.cityText, 
+                    { 
+                      color: profile.city ? theme.text : theme.textSecondary,
+                      fontFamily: theme.font 
+                    }
+                  ]}
+                >
+                  {profile.city || "Select your city"}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Bio</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary, fontFamily: theme.font }]}>Bio</Text>
             <TextInput
-              style={[styles.textArea, { borderColor: theme.border, color: theme.text }]}
+              style={[styles.textArea, { borderColor: theme.border, color: theme.text, fontFamily: theme.font }]}
               value={profile.bio}
               onChangeText={(text) => handleInputChange('bio', text)}
               placeholder="Write something about yourself"
@@ -250,8 +394,8 @@ const MyAccount = () => {
 
         {/* News Preferences Section */}
         <View style={[styles.section, { borderTopColor: theme.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>News Preferences</Text>
-          <Text style={[styles.sectionDescription, { color: theme.textSecondary }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: theme.titleFont }]}>News Preferences</Text>
+          <Text style={[styles.sectionDescription, { color: theme.textSecondary, fontFamily: theme.font }]}>
             Select categories you're interested in to personalize your news feed
           </Text>
           
@@ -273,7 +417,8 @@ const MyAccount = () => {
                     { 
                       color: profile.preferences.includes(category) 
                         ? '#fff' 
-                        : theme.text 
+                        : theme.text,
+                      fontFamily: theme.font 
                     }
                   ]}
                 >
@@ -288,16 +433,18 @@ const MyAccount = () => {
         </View>
 
         <View style={[styles.section, { borderTopColor: theme.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Account Settings</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: theme.titleFont }]}>Account Settings</Text>
           
           <TouchableOpacity 
             style={[styles.option, { borderBottomColor: theme.border }]}
             onPress={() => Alert.alert("Coming Soon", "This feature will be available soon")}
           >
+              <Link href='https://uptodate-app.vercel.app/ResetPassword'>
             <View style={styles.optionContent}>
               <Ionicons name="key-outline" size={20} color={theme.text} style={styles.optionIcon} />
-              <Text style={[styles.optionText, { color: theme.text }]}>Change Password</Text>
+              <Text style={[styles.optionText, { color: theme.text, fontFamily: theme.font }]}>Change Password</Text>
             </View>
+              </Link>
             <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
           
@@ -308,7 +455,7 @@ const MyAccount = () => {
           >
             <View style={styles.optionContent}>
               <Ionicons name="log-out-outline" size={20} color="#f44336" style={styles.optionIcon} />
-              <Text style={[styles.optionText, { color: "#f44336" }]}>
+              <Text style={[styles.optionText, { color: "#f44336", fontFamily: theme.font }]}>
                 {isLoggingOut ? "Logging out..." : "Logout"}
               </Text>
             </View>
@@ -320,9 +467,11 @@ const MyAccount = () => {
           style={styles.deleteButton}
           onPress={handleDeleteAccount}
         >
-          <Text style={styles.deleteButtonText}>Delete Account</Text>
+          <Text style={[styles.deleteButtonText, { fontFamily: theme.font }]}>Delete Account</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {renderCityModal()}
     </SafeAreaView>
   );
 };
@@ -415,15 +564,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    // backgroundColor: theme.cardBackground,
   },
   emailNote: {
     fontSize: 12,
     marginTop: 4,
     fontStyle: 'italic',
-  },
-  cityAutocomplete: {
-    marginTop: 8,
   },
   textArea: {
     borderWidth: 1,
@@ -432,7 +577,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     minHeight: 100,
-    // backgroundColor: theme.cardBackground,
+  },
+  citySelector: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  citySelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cityIcon: {
+    marginRight: 12,
+  },
+  cityText: {
+    fontSize: 16,
   },
   section: {
     marginTop: 20,
@@ -503,5 +666,78 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     marginLeft: 4,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end', // Bottom sheet style
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    height: '80%', // Takes up 80% of the screen
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 4,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  cityItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  cityItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cityName: {
+    fontSize: 16,
+  },
+  noResultsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  noResultsText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 16,
   }
 }); 
