@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, Dimensions, TouchableOpacity, Image, SafeAreaView, Animated, TouchableWithoutFeedback, Alert, Modal } from 'react-native'
-import React, { useEffect, useState, useRef, memo, useCallback } from 'react'
+import React, { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useVideoPlayer, VideoView } from 'expo-video'
 import { StatusBar } from 'expo-status-bar'
@@ -42,149 +42,192 @@ const VideoItem = memo(({
   handleSave,
   isSaved,
   onCommentAdded,
+  togglePlayPause,
 }) => {
   const [isReady, setIsReady] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [showComments, setShowComments] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const playerRef = useRef(null)
   const fadeAnim = useRef(new Animated.Value(0)).current
   const pauseIconAnim = useRef(new Animated.Value(0)).current
   const heartAnimation = useRef(new Animated.Value(1)).current
   const scaleAnim = useRef(new Animated.Value(isCurrentVideo ? 1 : 0.95)).current
 
-  
-  // Handle animations when video becomes current
+  // Console log video details for debugging
   useEffect(() => {
-    if (isCurrentVideo) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true
-        })
-      ]).start()
-    } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 0.95,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true
-        })
-      ]).start()
+    if (item) {
+      console.log(`Video ${index} details:`, {
+        id: item.id,
+        url: item.videoUrl,
+        isCurrentVideo,
+        isPaused
+      });
     }
-  }, [isCurrentVideo, fadeAnim, scaleAnim])
+  }, [item, index, isCurrentVideo, isPaused]);
+
+  // Simple URL validation - don't use URL format validation
+  const videoUrl = useMemo(() => {
+    if (!item || !item.videoUrl) return '';
+    return item.videoUrl;
+  }, [item]);
   
-  // Simple player initialization
-  const player = useVideoPlayer(item?.videoUrl || '', playerInstance => {
-    if (!playerInstance || !item) return;
+  // Initialize player with validated URL - ensure immediate autoplay
+  const player = useVideoPlayer(videoUrl, playerInstance => {
+    if (!playerInstance) {
+      console.log(`Failed to initialize player for video ${index}`);
+      return;
+    }
     
     try {
+      console.log(`Player successfully initialized for video ${index}`);
+      // Set basic properties
       playerInstance.loop = true;
       playerInstance.muted = isMuted;
-      setIsReady(true);
+      
+      // Store reference and update state
       playerRef.current = playerInstance;
+      setIsReady(true);
+      setLoadError(false); // Important: reset load error flag
+      setIsPaused(false);
+      
+      // Auto-play if this is the current video
+      if (isCurrentVideo) {
+        console.log(`Current video ${index} detected, forcing play`);
+        playerInstance.play()
+          .then(() => console.log(`Video ${index} playing successfully`))
+          .catch(err => console.log(`Error playing video ${index}:`, err));
+      }
     } catch (error) {
       console.log('Error initializing player:', error);
     }
   });
   
-  // Control video playback based on visibility
+  // Restore smooth animation effect when videos become current with faster timing
   useEffect(() => {
-    const player = playerRef.current;
-    if (!player || !isReady) return;
-    
-    const playVideo = async () => {
-      try {
-        if (isCurrentVideo && !isPaused) {
-          if (typeof player.play === 'function') {
-            await player.play().catch(() => {});
-          }
-        } else {
-          if (typeof player.pause === 'function') {
-            await player.pause().catch(() => {});
-          }
-        }
-      } catch (error) {
-        console.log('Error controlling playback:', error);
-      }
-    };
-    
-    playVideo();
-  }, [isCurrentVideo, isPaused, isReady]);
-  
-  // Handle mute state changes
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player || !isReady) return;
-    
-    try {
-      if (typeof player.setMuted === 'function') {
-        player.setMuted(isMuted);
-      }
-    } catch (error) {
-      console.log('Error setting mute state:', error);
-    }
-  }, [isMuted, isReady]);
-  
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      const player = playerRef.current;
-      if (!player) return;
+    if (isCurrentVideo) {
+      console.log(`Video ${index} became current, animating in`);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 50,
+          useNativeDriver: true
+        })
+      ]).start();
       
-      try {
-        if (typeof player.pause === 'function') {
-          player.pause().catch(() => {});
+      // Force play when video becomes current
+      if (playerRef.current) {
+        try {
+          console.log(`Forcing play for video ${index} as it became current`);
+          playerRef.current.play().catch(err => console.log('Error playing when current:', err));
+          setIsPaused(false); // Ensure state is synced
+        } catch (error) {
+          console.log('Error in current video play effect:', error);
         }
-        playerRef.current = null;
-      } catch (error) {
-        console.log('Error cleaning up player:', error);
       }
-    };
-  }, []);
+    } else {
+      console.log(`Video ${index} is no longer current, animating out`);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0.5,
+          duration: 100,
+          useNativeDriver: true
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 0.95,
+          friction: 5,
+          tension: 50,
+          useNativeDriver: true
+        })
+      ]).start();
+      
+      // Ensure non-current videos are paused to save resources
+      if (playerRef.current) {
+        try {
+          playerRef.current.pause().catch(err => console.log('Error pausing when not current:', err));
+        } catch (error) {
+          console.log('Error in non-current video pause effect:', error);
+        }
+      }
+    }
+  }, [isCurrentVideo, index, fadeAnim, scaleAnim]);
   
-  // Show pause icon animation
-  const showPauseIcon = () => {
-    pauseIconAnim.setValue(1);
-    Animated.timing(pauseIconAnim, {
-      toValue: 0,
-      duration: 800,
-      useNativeDriver: true,
-    }).start();
-  };
-  
-  // Handle video tap to play/pause
+  // Handle video tap - toggle pause state (make sure this works correctly)
   const handleVideoPress = () => {
+    if (!isCurrentVideo || !playerRef.current) return;
+    
+    console.log(`Video ${index} pressed, toggling pause state`);
     setIsPaused(prev => {
       const newPaused = !prev;
-      if (newPaused) showPauseIcon();
+      
+      if (newPaused) {
+        showPauseIcon();
+      }
+      
+      // Force video to play/pause immediately
+      try {
+        if (newPaused) {
+          console.log(`Pausing video ${index} on user tap`);
+          playerRef.current.pause()
+            .catch(err => console.log(`Error pausing video ${index}:`, err));
+        } else {
+          console.log(`Playing video ${index} on user tap`);
+          playerRef.current.play()
+            .catch(err => console.log(`Error playing video ${index}:`, err));
+        }
+      } catch (error) {
+        console.log('Error in handleVideoPress:', error);
+      }
+      
       return newPaused;
     });
   };
   
-  // Handle like animation
+  // Fixed mute button handler with direct player access
+  const handleMuteToggle = () => {
+    console.log(`Toggling mute from ${isMuted} to ${!isMuted}`);
+    
+    // Update global mute state
+    setIsMuted(!isMuted);
+    
+    // Also directly update the player for immediate effect
+    if (playerRef.current) {
+      try {
+        playerRef.current.muted = !isMuted;
+        console.log(`Player mute set to ${!isMuted} for video ${index}`);
+      } catch (error) {
+        console.log('Error toggling mute state:', error);
+      }
+    }
+  };
+  
+  // Show pause icon animation with faster timing
+  const showPauseIcon = () => {
+    pauseIconAnim.setValue(1);
+    Animated.timing(pauseIconAnim, {
+      toValue: 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  // Handle like animation with faster timing
   const animateHeart = () => {
     Animated.sequence([
       Animated.timing(heartAnimation, {
-        toValue: 1.2,
-        duration: 100,
+        toValue: 1.3,
+        duration: 50,
         useNativeDriver: true,
       }),
       Animated.timing(heartAnimation, {
         toValue: 1,
-        duration: 100,
+        duration: 50,
         useNativeDriver: true,
       }),
     ]).start();
@@ -228,15 +271,16 @@ const VideoItem = memo(({
       {/* Video Player with tap gesture */}
       <TouchableWithoutFeedback onPress={handleVideoPress}>
         <View style={styles.videoWrapper}>
-          {item?.videoUrl ? (
+          {videoUrl ? (
             <VideoView 
               style={styles.video} 
               player={player}
-              allowsFullscreen
+              allowsFullscreen={false}
               nativeControls={false}
+              resizeMode="cover"
             />
           ) : (
-            <View style={[styles.video, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center'}]}>
+            <View style={[styles.video, {backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'}]}>
               <Text style={{color: '#fff'}}>Video not available</Text>
             </View>
           )}
@@ -332,19 +376,20 @@ const VideoItem = memo(({
             {item.description}
           </Text>
         )}
-        
-        <TouchableOpacity
-          style={styles.muteButton}
-          onPress={() => setIsMuted(!isMuted)}
-          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
-        >
-          <Ionicons
-            name={isMuted ? "volume-mute" : "volume-high"}
-            size={24}
-            color="white"
-          />
-        </TouchableOpacity>
       </View>
+
+      {/* Enhanced Mute Button with better tap area */}
+      <TouchableOpacity
+        style={styles.muteButton}
+        onPress={handleMuteToggle}
+        hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
+      >
+        <Ionicons
+          name={isMuted ? "volume-mute" : "volume-high"}
+          size={24}
+          color="white"
+        />
+      </TouchableOpacity>
 
       {/* Comments Modal */}
       <CommentsModal
@@ -451,7 +496,7 @@ const EndOfContentScreen = ({ onExploreArticles }) => {
       </Text>
       <TouchableOpacity 
         style={styles.exploreArticlesButton}
-        onPress={onExploreArticles}
+        onPress={()=>router.push('/articles')}
       >
         <Text style={styles.exploreArticlesButtonText}>
           Explore Articles
@@ -480,8 +525,8 @@ const HomeScreen = () => {
   // References
   const flatListRef = useRef(null)
   const viewabilityConfigRef = useRef({
-    itemVisiblePercentThreshold: 80,
-    minimumViewTime: 300,
+    itemVisiblePercentThreshold: 70, // Lower threshold to trigger sooner
+    minimumViewTime: 200, // Faster recognition of visible items
   })
   
   // Effect to load videos when category changes
@@ -824,9 +869,10 @@ const HomeScreen = () => {
         handleSave={handleSave}
         isSaved={isSaved}
         onCommentAdded={handleCommentAdded}
+        togglePlayPause={togglePlayPause}
       />
     );
-  }, [currentIndex, isMuted, likedVideos, likeCounts, savedVideos, commentCounts]);
+  }, [currentIndex, isMuted, likedVideos, likeCounts, savedVideos, commentCounts, togglePlayPause]);
   
   // Handle viewable items changed
   const onViewableItemsChanged = useCallback(({ viewableItems }) => {
@@ -834,9 +880,35 @@ const HomeScreen = () => {
     
     const visibleItem = viewableItems[0];
     if (visibleItem && typeof visibleItem.index === 'number') {
-      setCurrentIndex(visibleItem.index);
+      console.log(`Item at index ${visibleItem.index} is now viewable`);
+      
+      // If different from current, update with animation
+      if (visibleItem.index !== currentIndex) {
+        // Update current index
+        setCurrentIndex(visibleItem.index);
+        
+        // Add subtle haptic feedback for better UX (if available in your setup)
+        // ReactNativeHapticFeedback.trigger('impactLight');
+      }
     }
-  }, []);
+  }, [currentIndex]);
+  
+  // Force first video to play when app loads or refocuses
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Screen focused, ensuring first video plays');
+      if (videos.length > 0) {
+        // Reset current index to 0 and trigger a re-render
+        setCurrentIndex(0);
+        // Reset toggle to ensure video plays
+        setTogglePlayPause(false);
+      }
+      
+      return () => {
+        console.log('Screen unfocused');
+      };
+    }, [videos])
+  );
   
   // Render loading state
   if (loading) {
@@ -877,11 +949,6 @@ const HomeScreen = () => {
           onSelectCategory={handleCategoryChange}
         />
       </View>
-      
-      {/* Touchable overlay for play/pause */}
-      <TouchableWithoutFeedback onPress={handleTogglePlayPause}>
-        <View style={styles.touchableOverlay} />
-      </TouchableWithoutFeedback>
       
       {/* Video list */}
       <FlatList
@@ -998,6 +1065,7 @@ const styles = StyleSheet.create({
     left: 15,
     right: 70, // Leave space for action buttons
     bottom: 30,
+    zIndex: 90, // Ensure it's below the mute button
   },
   authorRow: {
     flexDirection: 'row',
@@ -1020,13 +1088,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 10,
   },
+  
+  // Enhanced mute button
   muteButton: {
     position: 'absolute',
-    right: -55,
-    bottom: 38,
+    right: 15,
+    bottom: 75,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 8,
-    borderRadius: 20,
+    padding: 10,
+    borderRadius: 24,
+    zIndex: 95, // Ensure it's above the video info area
   },
   pauseIconContainer: {
     position: 'absolute',
