@@ -1,19 +1,66 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function Login() {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
+  const { loginWithEmail, promptGoogleSignIn } = useAuth();
 
-  const handleLogin = () => {
-    router.push('/(tabs)');
+  const validateForm = () => {
+    if (!email.trim()) {
+      setError('Please enter your email');
+      return false;
+    }
+    if (!password) {
+      setError('Please enter your password');
+      return false;
+    }
+    
+    setError('');
+    return true;
+  };
+
+  const handleLogin = async () => {
+    if (!validateForm()) return;
+    
+    setIsLoggingIn(true);
+    try {
+      const result = await loginWithEmail(email, password);
+      
+      if (result.success) {
+        // Login successful, navigate to tabs
+        router.push('/(tabs)');
+      } else {
+        // Show error
+        setError(result.error);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await promptGoogleSignIn();
+      // If successful, the auth state will change and redirect happens in AuthContext
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      setError('Failed to sign in with Google. Please try again.');
+    }
+  };
+
+  const handleForgotPassword = () => {
+    router.push('/screens/Auth/ForgotPassword');
   };
 
   return (
@@ -22,12 +69,21 @@ export default function Login() {
         <Text style={styles.title}>Welcome Back 👋</Text>
         <Text style={styles.subtitle}>Enter Your Details to Login in your Account</Text>
         
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+        
         {/* Input Fields */}
         <Text style={styles.label}>Email address</Text>
         <TextInput
           style={styles.input}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={text => {
+            setEmail(text);
+            setError('');
+          }}
           placeholder="Enter your email"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -35,7 +91,7 @@ export default function Login() {
 
         <View style={styles.passwordContainer}>
           <Text style={styles.label}>Password</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)')}>
+          <TouchableOpacity onPress={handleForgotPassword}>
             <Text style={styles.forgotPassword}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
@@ -44,7 +100,10 @@ export default function Login() {
           <TextInput
             style={[styles.input, styles.passwordInput]}
             value={password}
-            onChangeText={setPassword}
+            onChangeText={text => {
+              setPassword(text);
+              setError('');
+            }}
             secureTextEntry={!showPassword}
             placeholder="Enter your password"
           />
@@ -62,11 +121,18 @@ export default function Login() {
 
         {/* Login Button */}
         <TouchableOpacity 
-          style={[styles.loginButton, !agreeToTerms && styles.loginButtonDisabled]} 
+          style={[
+            styles.loginButton, 
+            (!email || !password || isLoggingIn) && styles.loginButtonDisabled
+          ]} 
           onPress={handleLogin}
-          disabled={!agreeToTerms}
+          disabled={!email || !password || isLoggingIn}
         >
-          <Text style={styles.loginButtonText}>Log In</Text>
+          {isLoggingIn ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.loginButtonText}>Log In</Text>
+          )}
         </TouchableOpacity>
 
         {/* Social Login */}
@@ -76,12 +142,16 @@ export default function Login() {
           <View style={styles.OrLine}></View>
         </View>
         <View style={styles.socialContainer}>
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleGoogleLogin}
+            disabled={isLoggingIn}
+          >
             <Image 
               source={{ uri: 'https://www.google.com/favicon.ico' }}
               style={styles.socialIcon}
             />
-            <Text style={styles.socialButtonText}>Google</Text>
+            <Text style={styles.socialButtonText}>Sign in with Google</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -109,15 +179,26 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
     marginTop: 40,
     marginBottom: 10,
   },
   subtitle: {
-  fontFamily: 'Inter-Bold',
     fontSize: 16,
     color: '#666',
     marginBottom: 40,
+  },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+  },
+  errorText: {
+    color: '#d32f2f',
+    fontSize: 14,
   },
   socialContainer: {
     flexDirection: 'row',
@@ -127,44 +208,42 @@ const styles = StyleSheet.create({
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#fff',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ddd',
-    flex: 0.48,
+    width: '100%',
+    justifyContent: 'center',
   },
   socialIcon: {
     width: 24,
     height: 24,
-    marginRight: 8,
+    marginRight: 12,
   },
   socialButtonText: {
-    fontFamily: 'Inter-SemiBold',
     fontSize: 16,
-    fontWeight: '500',
+    color: '#333',
   },
   orText: {
-    fontFamily: 'Inter-SemiBold',
     fontSize: 15,
     color: '#666',
-    marginVertical: 20,
     marginHorizontal: 10,
   },
   label: {
-    fontFamily: 'Inter-Regular',
     fontSize: 16,
     marginBottom: 8,
     fontWeight: '500',
+    color: '#333',
   },
   input: {
-    height: 50,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    paddingHorizontal: 15,
+    padding: 12,
     marginBottom: 20,
     fontSize: 16,
+    backgroundColor: '#fafafa',
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -173,7 +252,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   forgotPassword: {
-    fontFamily: 'Inter-Regular',
     color: '#007AFF',
     fontSize: 14,
   },
@@ -196,12 +274,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 20,
+    height: 50,
+    justifyContent: 'center',
   },
   loginButtonDisabled: {
     opacity: 0.6,
   },
   loginButtonText: {
-    fontFamily: 'Inter-Bold',
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
@@ -215,7 +294,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
   },
   signUpText: {
-    fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: '#666',
   },
@@ -224,15 +302,11 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '500',
   },
-  footer: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 12,
-  },
   OrContainer: {
     justifyContent: 'center',
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    marginVertical: 15,
   },
   OrLine: {
     width: '40%',

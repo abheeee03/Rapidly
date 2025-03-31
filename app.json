@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.yourcompany.scrollnews"
+      "package": "com.abheeee.scrollnews"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -45,11 +45,12 @@
       }
     },
     "updates": {
-      "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/your-project-id"
+      "url": "https://u.expo.dev/eab11ea0-2bd0-4378-bb8d-81f00c6be33f",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD"
     },
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "sdkVersion"
     },
     "owner": "abheeee03"
   }

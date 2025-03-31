@@ -560,6 +560,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
+    marginBottom: 15,
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
   },

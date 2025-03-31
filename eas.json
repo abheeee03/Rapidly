@@ -6,13 +6,55 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyA7cZ5iHqh2CNpejD35KrJidLDa99BxgYQ",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "scrollnews-db.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "scrollnews-db",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "scrollnews-db.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1002772275685",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1002772275685:web:f4ce129a63930351f2cf0c",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-351QB0BP6L",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "dvd9p28iu",
+        "EXPO_PUBLIC_CLOUDINARY_API_KEY": "685895236811835",
+        "EXPO_PUBLIC_CLOUDINARY_API_SECRET": "h-VlhDzMYCpr9QZCAoFSdxC0CYA"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyA7cZ5iHqh2CNpejD35KrJidLDa99BxgYQ",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "scrollnews-db.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "scrollnews-db",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "scrollnews-db.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1002772275685",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1002772275685:web:f4ce129a63930351f2cf0c",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-351QB0BP6L",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "dvd9p28iu",
+        "EXPO_PUBLIC_CLOUDINARY_API_KEY": "685895236811835",
+        "EXPO_PUBLIC_CLOUDINARY_API_SECRET": "h-VlhDzMYCpr9QZCAoFSdxC0CYA"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyA7cZ5iHqh2CNpejD35KrJidLDa99BxgYQ",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "scrollnews-db.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "scrollnews-db",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "scrollnews-db.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1002772275685",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1002772275685:web:f4ce129a63930351f2cf0c",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-351QB0BP6L",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "dvd9p28iu",
+        "EXPO_PUBLIC_CLOUDINARY_API_KEY": "685895236811835",
+        "EXPO_PUBLIC_CLOUDINARY_API_SECRET": "h-VlhDzMYCpr9QZCAoFSdxC0CYA"
+      }
     }
   },
   "submit": {
