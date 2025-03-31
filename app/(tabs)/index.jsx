@@ -8,7 +8,7 @@ import { db, auth } from '../../Utlis/firebase'
 import { collection, getDocs, query, where, orderBy, limit, doc, getDoc, updateDoc, increment, addDoc, deleteDoc, serverTimestamp, startAfter } from 'firebase/firestore'
 import { BlurView } from 'expo-blur'
 import CommentsModal from '../components/CommentsModal'
-
+import {useTheme} from '../../context/ThemeContext'
 
 const { width, height } = Dimensions.get('window')
 
@@ -53,6 +53,7 @@ const VideoItem = memo(({
   const pauseIconAnim = useRef(new Animated.Value(0)).current
   const heartAnimation = useRef(new Animated.Value(1)).current
   const scaleAnim = useRef(new Animated.Value(isCurrentVideo ? 1 : 0.95)).current
+  const {theme} = useTheme()
 
   // Console log video details for debugging
   useEffect(() => {
@@ -102,7 +103,7 @@ const VideoItem = memo(({
       console.log('Error initializing player:', error);
     }
   });
-  
+
   // Restore smooth animation effect when videos become current with faster timing
   useEffect(() => {
     if (isCurrentVideo) {
@@ -257,16 +258,17 @@ const VideoItem = memo(({
   
   const formattedDate = item?.createdAt ? formatDate(item.createdAt) : '';
   
-  // Render the component
+  // Render the component with theme
   return (
     <Animated.View style={[
       styles.videoContainer,
       {
         opacity: fadeAnim,
-        transform: [{ scale: scaleAnim }]
+        transform: [{ scale: scaleAnim }],
+        backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background,
       }
     ]}>
-      <StatusBar style="light" />
+      <StatusBar style={theme.background === '#FFFFFF' ? "dark" : "light"} />
       
       {/* Video Player with tap gesture */}
       <TouchableWithoutFeedback onPress={handleVideoPress}>
@@ -280,8 +282,8 @@ const VideoItem = memo(({
               resizeMode="cover"
             />
           ) : (
-            <View style={[styles.video, {backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'}]}>
-              <Text style={{color: '#fff'}}>Video not available</Text>
+            <View style={[styles.video, {backgroundColor: theme.cardBackground, justifyContent: 'center', alignItems: 'center'}]}>
+              <Text style={{color: theme.text, fontFamily: theme.font}}>Video not available</Text>
             </View>
           )}
           
@@ -292,15 +294,15 @@ const VideoItem = memo(({
               { opacity: pauseIconAnim }
             ]}
           >
-            <Ionicons name="pause" size={80} color="white" />
+            <Ionicons name="pause" size={80} color={theme.text} />
           </Animated.View>
         </View>
       </TouchableWithoutFeedback>
       
       {/* Category Tag */}
       {item?.category && item.category !== "All" && (
-        <View style={styles.categoryTag}>
-          <Text style={styles.categoryTagText}>{item.category}</Text>
+        <View style={[styles.categoryTag, { backgroundColor: theme.accent + 'CC' }]}>
+          <Text style={[styles.categoryTagText, { fontFamily: theme.font }]}>{item.category}</Text>
         </View>
       )}
       
@@ -315,11 +317,12 @@ const VideoItem = memo(({
             <AntDesign
               name={isLiked ? "heart" : "hearto"}
               size={28}
-              color={isLiked ? "red" : "white"}
+              color={isLiked ? "red" : theme.text}
             />
           </Animated.View>
           <Text style={[
             styles.actionButtonText,
+            { fontFamily: theme.font },
             isLiked && { color: 'red' }
           ]}>{likeCount}</Text>
         </TouchableOpacity>
@@ -329,16 +332,16 @@ const VideoItem = memo(({
           onPress={() => setShowComments(true)}
           hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
         >
-          <Ionicons name="chatbubble-outline" size={26} color="white" />
-          <Text style={styles.actionButtonText}>{item?.comments || 0}</Text>
+          <Ionicons name="chatbubble-outline" size={26} color={theme.text} />
+          <Text style={[styles.actionButtonText, { fontFamily: theme.font }]}>{item?.comments || 0}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={styles.actionButtonColumn}
           hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
         >
-          <Ionicons name="arrow-redo-outline" size={26} color="white" />
-          <Text style={styles.actionButtonText}>Share</Text>
+          <Ionicons name="arrow-redo-outline" size={26} color={theme.text} />
+          <Text style={[styles.actionButtonText, { fontFamily: theme.font }]}>Share</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -349,30 +352,30 @@ const VideoItem = memo(({
           <MaterialIcons
             name={isSaved ? "bookmark" : "bookmark-outline"}
             size={28}
-            color={isSaved ? "#FFF" : "white"}
+            color={isSaved ? theme.accent : theme.text}
           />
-          <Text style={styles.actionButtonText}>Save</Text>
+          <Text style={[styles.actionButtonText, { fontFamily: theme.font }]}>Save</Text>
         </TouchableOpacity>
       </View>
       
       {/* Video Info */}
       <View style={styles.videoInfoArea}>
         <View style={styles.authorRow}>
-          <Text style={styles.authorName}>@{item?.uploadedBy || 'UptoDate'}</Text>
+          <Text style={[styles.authorName, { color: theme.text, fontFamily: theme.titleFont }]}>@{item?.uploadedBy || 'UptoDate'}</Text>
           {formattedDate && (
             <>
-              <Text style={styles.authorSeparator}>•</Text>
-              <Text style={styles.videoDate}>{formattedDate}</Text>
+              <Text style={[styles.authorSeparator, { color: theme.textSecondary }]}>•</Text>
+              <Text style={[styles.videoDate, { color: theme.textSecondary, fontFamily: theme.font }]}>{formattedDate}</Text>
             </>
           )}
         </View>
         
-        <Text style={styles.videoTitle} numberOfLines={2}>
+        <Text style={[styles.videoTitle, { color: theme.text, fontFamily: theme.titleFont }]} numberOfLines={2}>
           {item?.title || "Latest News Update"}
         </Text>
         
         {item?.description && (
-          <Text style={styles.videoDescription} numberOfLines={2}>
+          <Text style={[styles.videoDescription, { color: theme.textSecondary, fontFamily: theme.font }]} numberOfLines={2}>
             {item.description}
           </Text>
         )}
@@ -380,14 +383,14 @@ const VideoItem = memo(({
 
       {/* Enhanced Mute Button with better tap area */}
       <TouchableOpacity
-        style={styles.muteButton}
+        style={[styles.muteButton, { backgroundColor: theme.cardBackground + '80' }]}
         onPress={handleMuteToggle}
         hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
       >
         <Ionicons
           name={isMuted ? "volume-mute" : "volume-high"}
           size={24}
-          color="white"
+          color={theme.text}
         />
       </TouchableOpacity>
 
@@ -407,7 +410,7 @@ const VideoItem = memo(({
 const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
   const [modalVisible, setModalVisible] = useState(false)
   const scaleAnim = useRef(new Animated.Value(0)).current
-  
+  const {theme} = useTheme()
   useEffect(() => {
     if (modalVisible) {
       Animated.spring(scaleAnim, {
@@ -428,7 +431,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
         onPress={() => setModalVisible(true)}
       >
         <Text style={styles.categoryButtonText}>{selectedCategory}</Text>
-        <Ionicons name="chevron-down" size={16} color="#FFF" />
+        <Ionicons name="chevron-down" size={16} color={theme.text} />
       </TouchableOpacity>
       
       <Modal
@@ -472,7 +475,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
                       {category}
                     </Text>
                     {selectedCategory === category && (
-                      <Ionicons name="checkmark" size={18} color="#FF4C54" />
+                      <Ionicons name="checkmark" size={18} color={theme.accent} />
                     )}
                   </TouchableOpacity>
                 ))}
@@ -487,18 +490,20 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
 
 // End of content screen
 const EndOfContentScreen = ({ onExploreArticles }) => {
+  const {theme} = useTheme()
+  
   return (
-    <View style={styles.endOfContentContainer}>
-      <Ionicons name="newspaper-outline" size={64} color='#0A84FF' />
-      <Text style={styles.endOfContentTitle}>You've Reached the End</Text>
-      <Text style={styles.endOfContentText}>
+    <View style={[styles.endOfContentContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+      <Ionicons name="newspaper-outline" size={64} color={theme.accent} />
+      <Text style={[styles.endOfContentTitle, { color: theme.text, fontFamily: theme.titleFont }]}>You've Reached the End</Text>
+      <Text style={[styles.endOfContentText, { color: theme.textSecondary, fontFamily: theme.font }]}>
         That's all the shorts available in this category.
       </Text>
       <TouchableOpacity 
-        style={styles.exploreArticlesButton}
+        style={[styles.exploreArticlesButton, { backgroundColor: theme.accent }]}
         onPress={()=>router.push('/articles')}
       >
-        <Text style={styles.exploreArticlesButtonText}>
+        <Text style={[styles.exploreArticlesButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>
           Explore Articles
         </Text>
       </TouchableOpacity>
@@ -521,7 +526,7 @@ const HomeScreen = () => {
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [lastVisible, setLastVisible] = useState(null)
   const [hasMoreVideos, setHasMoreVideos] = useState(true)
-  
+  const {theme} = useTheme()
   // References
   const flatListRef = useRef(null)
   const viewabilityConfigRef = useRef({
@@ -909,41 +914,40 @@ const HomeScreen = () => {
       };
     }, [videos])
   );
-  
-  // Render loading state
+  // Render loading state with theme
   if (loading) {
     return (
-      <View style={styles.centeredContainer}>
-        <StatusBar style="light" />
-        <ActivityIndicator size="large" color="#FFF" />
-        <Text style={styles.loadingText}>Loading News...</Text>
+      <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+        <StatusBar style={theme.background === '#FFFFFF' ? "dark" : "light"} />
+        <ActivityIndicator size="large" color={theme.accent} />
+        <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading News...</Text>
       </View>
     );
   }
   
-  // Render error or empty state
+  // Render error or empty state with theme
   if (error || !videos.length) {
     return (
-      <View style={styles.centeredContainer}>
-        <StatusBar style="light" />
-        <Ionicons name="cloud-offline" size={64} color="#FF4C54" />
-        <Text style={styles.errorTitle}>{!videos.length ? "No Videos Found" : "Error"}</Text>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => loadVideos(true)}>
-          <Text style={styles.retryButtonText}>Try Again</Text>
+      <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+        <StatusBar style={theme.background === '#FFFFFF' ? "dark" : "light"} />
+        <Ionicons name="cloud-offline" size={64} color={theme.accent} />
+        <Text style={[styles.errorTitle, { color: theme.text, fontFamily: theme.titleFont }]}>{!videos.length ? "No Videos Found" : "Error"}</Text>
+        <Text style={[styles.errorText, { color: theme.textSecondary, fontFamily: theme.font }]}>{error}</Text>
+        <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.accent }]} onPress={() => loadVideos(true)}>
+          <Text style={[styles.retryButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );
   }
   
-  // Main render
+  // Main render with theme
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+      <StatusBar style={theme.background === '#FFFFFF' ? "dark" : "light"} />
       
       {/* Header with category selector */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>UptoDate Shorts</Text>
+        <Text style={[styles.headerTitle, { color: theme.text, fontFamily: theme.titleFont }]}>UptoDate News</Text>
         <CategorySelector 
           selectedCategory={selectedCategory}
           onSelectCategory={handleCategoryChange}
@@ -977,9 +981,9 @@ const HomeScreen = () => {
         ListFooterComponent={() => (
           <>
             {loadingMore && (
-              <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator color="#FFF" />
-                <Text style={styles.loadingMoreText}>Loading more...</Text>
+              <View style={[styles.loadingMoreContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+                <ActivityIndicator color={theme.accent} />
+                <Text style={[styles.loadingMoreText, { color: theme.text, fontFamily: theme.font }]}>Loading more...</Text>
               </View>
             )}
             
@@ -1186,7 +1190,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   selectedCategoryItem: {
-    backgroundColor: 'rgba(255,76,84,0.1)',
+    backgroundColor: 'rgba(109, 76, 255, 0.1)',
   },
   categoryItemText: {
     color: '#FFF',
@@ -1194,7 +1198,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   selectedCategoryItemText: {
-    color: '#FF4C54',
+    color: '#0A84FF',
     fontWeight: '700',
   },
   
