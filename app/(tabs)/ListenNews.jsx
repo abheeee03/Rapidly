@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar'
 import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore'
 import { db } from '../../Utlis/firebase'
 import { useRouter } from 'expo-router'
+import Slider from '@react-native-community/slider'
 
 const { width, height } = Dimensions.get('window')
 
@@ -54,6 +55,10 @@ const ListenNews = () => {
     image: getRandomBannerImage(),
     views: 0,
   })
+  const [duration, setDuration] = useState(0)
+  const [position, setPosition] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const progressBarRef = useRef(new Animated.Value(0)).current
   
   const dropdownAnimation = useRef(new Animated.Value(0)).current
   
@@ -81,6 +86,9 @@ const ListenNews = () => {
   // Fetch top articles from Firebase
   useEffect(() => {
     fetchTopArticles()
+  }, [])
+  useEffect(() => {
+    getAudioUrl(selectedLanguage)
   }, [])
   
   const fetchTopArticles = async () => {
@@ -194,19 +202,41 @@ const ListenNews = () => {
     }
   }
 
-  // Attempt to load audio with fallback to other languages if needed
+  // Load audio when component mounts or language changes
+  useEffect(() => {
+    loadAudio()
+  }, [selectedLanguage])
+
+  // Update progress bar animation
+  useEffect(() => {
+    if (playing && duration > 0) {
+      Animated.timing(progressBarRef, {
+        toValue: position / duration,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start()
+    }
+  }, [position, duration, playing])
+
+  // Format time helper function
+  const formatTime = (milliseconds) => {
+    const totalSeconds = Math.floor(milliseconds / 1000)
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  // Update loadAudio function
   const loadAudio = async (languageCode = selectedLanguage, isRetry = false) => {
     try {
-      setLoading(true)
+      setIsLoading(true)
       setError(null)
       setLanguageFallbackMessage('')
       
-      // Unload previous sound if exists
       if (sound) {
         await sound.unloadAsync()
       }
       
-      // Find language object based on language code
       const selectedLang = LANGUAGES.find(lang => lang.code === languageCode)
       if (!selectedLang) {
         throw new Error(`Language ${languageCode} not found`)
@@ -215,10 +245,7 @@ const ListenNews = () => {
       const audioFileName = selectedLang.fileName
       const audioUrl = getAudioUrl(audioFileName)
       
-      console.log('Loading audio from:', audioUrl)
-      
       try {
-        // Pre-load the audio file
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: audioUrl },
           { shouldPlay: false },
@@ -226,9 +253,8 @@ const ListenNews = () => {
         )
         
         setSound(newSound)
-        setLoading(false)
+        setIsLoading(false)
         
-        // If we fell back to a different language, inform the user
         if (isRetry && languageCode !== selectedLanguage) {
           const originalLang = LANGUAGES.find(lang => lang.code === selectedLanguage)?.label
           const fallbackLang = selectedLang.label
@@ -239,26 +265,19 @@ const ListenNews = () => {
       } catch (audioError) {
         console.error('Error loading specific audio file:', audioError)
         
-        // If this isn't already a retry attempt, try other languages
         if (!isRetry) {
-          // Try other languages in sequence (filter out current language)
           const otherLanguages = LANGUAGES.filter(lang => lang.code !== languageCode)
-          
-          // Try each alternative language
           for (const lang of otherLanguages) {
-            console.log(`Trying fallback language: ${lang.code}`)
             const success = await loadAudio(lang.code, true)
             if (success) return true
           }
         }
-        
-        // If we get here during a retry, just throw to trigger the outer catch
         throw new Error('Could not load audio in any language')
       }
     } catch (error) {
       console.error('Error loading audio:', error)
       setError('Couldn\'t load audio in any language. Please try again later.')
-      setLoading(false)
+      setIsLoading(false)
       return false
     }
   }
@@ -292,10 +311,13 @@ const ListenNews = () => {
     }
   }
 
+  // Update onPlaybackStatusUpdate function
   const onPlaybackStatusUpdate = (status) => {
     if (status.didJustFinish) {
-      // Restart the audio when it finishes
       sound?.replayAsync()
+    } else {
+      setPosition(status.positionMillis)
+      setDuration(status.durationMillis)
     }
   }
 
@@ -481,14 +503,17 @@ const ListenNews = () => {
               style={[styles.articleImage, {backgroundColor: theme.background}]}
               resizeMode="cover"
             />
-            
+          </View>
+          
+          {/* Audio Controls Container */}
+          <View style={[styles.audioControlsContainer, { backgroundColor: theme.cardBackground }]}>
             {/* Play Button */}
             <TouchableOpacity
               style={[styles.playButton, {backgroundColor: theme.accent}]}
               onPress={togglePlayback}
-              disabled={loading}
+              disabled={isLoading}
             >
-              {loading ? (
+              {isLoading ? (
                 <ActivityIndicator size="large" color={theme.text} />
               ) : (
                 <Ionicons 
@@ -498,12 +523,31 @@ const ListenNews = () => {
                 />
               )}
             </TouchableOpacity>
-          <View style={[styles.readyToPlayContainer]}>
-            <Text style={[styles.readyToPlay, {color: theme.text, fontFamily: theme.font}]}>Click Here to {playing ? 'Pause' : 'Play'}</Text>
+
+            {/* Progress Bar */}
+            <View style={styles.progressContainer}>
+              <Animated.View 
+                style={[
+                  styles.progressBar,
+                  {
+                    backgroundColor: theme.accent,
+                    width: progressBarRef.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%']
+                    })
+                  }
+                ]} 
+              />
+              <View style={[styles.progressBackground, { backgroundColor: theme.border }]} />
+            </View>
+            
+            {/* Time Display */}
+            <View style={styles.timeContainer}>
+              <Text style={[styles.timeText, { color: theme.text }]}>{formatTime(position)}</Text>
+              <Text style={[styles.timeText, { color: theme.text }]}>{formatTime(duration)}</Text>
+            </View>
           </View>
-          </View>
-          </View>
-          
+        </View>
         
         {/* Status Message */}
         {languageFallbackMessage ? (
@@ -580,37 +624,59 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   imageContainer: {
-    // position: 'relative',
     width: '100%',
   },
   articleImage: {
     width: '100%',
     height: 200,
   },
-  readyToPlayContainer: {
+  audioControlsContainer: {
     padding: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
   },
-  readyToPlay: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#999999',
-    marginBottom: 8,
+  progressContainer: {
+    height: 4,
+    borderRadius: 2,
+    marginTop: 15,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 2,
+  },
+  progressBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 2,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  timeText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
   },
   playButton: {
-    margin: 10,
-    // position: 'absolute',
-    bottom: -8,
     alignSelf: 'center',
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#007AFF',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   languageContainer: {
     marginHorizontal: 20,
