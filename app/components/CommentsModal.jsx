@@ -17,6 +17,7 @@ import { db } from '../../Utlis/firebase';
 import { collection, query, orderBy, limit, addDoc, getDocs, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { BlurView } from 'expo-blur';
+import { useTheme } from '../../context/ThemeContext';
 
 const CommentsModal = ({ visible, onClose, videoId, commentsCount, onCommentAdded }) => {
   const [comments, setComments] = useState([]);
@@ -95,7 +96,7 @@ const CommentsModal = ({ visible, onClose, videoId, commentsCount, onCommentAdde
     if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
     return date.toLocaleDateString();
   };
-
+  const { theme } = useTheme();
   const renderComment = ({ item }) => (
     <View style={styles.commentContainer}>
       <Image
@@ -120,11 +121,11 @@ const CommentsModal = ({ visible, onClose, videoId, commentsCount, onCommentAdde
       onRequestClose={onClose}
     >
       <BlurView intensity={20} style={styles.modalContainer}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Comments ({commentsCount})</Text>
+            <Text style={[styles.modalTitle, {color: theme.text}]}>Comments ({commentsCount})</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="white" />
+              <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
           </View>
 
@@ -144,9 +145,9 @@ const CommentsModal = ({ visible, onClose, videoId, commentsCount, onCommentAdde
             style={styles.inputContainer}
           >
             <TextInput
-              style={styles.input}
+              style={[styles.input, {color: theme.text, backgroundColor: theme.cardBackground }]}
               placeholder="Add a comment..."
-              placeholderTextColor="#666"
+              placeholderTextColor={theme.text}
               value={newComment}
               onChangeText={setNewComment}
               multiline
@@ -156,13 +157,14 @@ const CommentsModal = ({ visible, onClose, videoId, commentsCount, onCommentAdde
               disabled={!newComment.trim() || submitting}
               style={[
                 styles.submitButton,
+                { backgroundColor: theme.accent },
                 (!newComment.trim() || submitting) && styles.submitButtonDisabled
               ]}
             >
               {submitting ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text style={styles.submitButtonText}>Post</Text>
+                <Text style={[styles.submitButtonText, { color: 'white'}]}>Post</Text>
               )}
             </TouchableOpacity>
           </KeyboardAvoidingView>
@@ -229,11 +231,10 @@ const styles = StyleSheet.create({
   },
   commentDate: {
     fontSize: 12,
-    color: '#666',
   },
   commentText: {
     fontSize: 14,
-    color: 'white',
+
     lineHeight: 20,
   },
   inputContainer: {
