@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Dimensions, TouchableOpacity, Image, SafeAreaView, Animated, TouchableWithoutFeedback, Alert, Modal } from 'react-native'
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Dimensions, TouchableOpacity, Image, SafeAreaView, Animated, TouchableWithoutFeedback, Alert, Modal, ScrollView } from 'react-native'
 import React, { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useVideoPlayer, VideoView } from 'expo-video'
@@ -10,6 +10,8 @@ import { BlurView } from 'expo-blur'
 import CommentsModal from '../components/CommentsModal'
 import {useTheme} from '../../context/ThemeContext'
 import { router } from 'expo-router'
+import { scale, verticalScale, moderateScale } from 'react-native-size-matters'
+import PagerView from 'react-native-pager-view'
 
 const { width, height } = Dimensions.get('window')
 
@@ -297,11 +299,11 @@ const VideoItem = memo(({
               allowsFullscreen={false}
           nativeControls={false}
             resizeMode="cover" 
-          />
+        />
           ) : (
             <View style={[styles.video, {backgroundColor: theme.cardBackground, justifyContent: 'center', alignItems: 'center'}]}>
               <Text style={{color: theme.text, fontFamily: theme.font}}>Video not available</Text>
-            </View>
+      </View>
           )}
           
           {/* Large Pause Icon */}
@@ -391,20 +393,20 @@ const VideoItem = memo(({
           </Text>
         )}
       </View>
-
+      
       {/* Enhanced Mute Button with better tap area */}
       <TouchableOpacity
         style={[styles.muteButton, { backgroundColor: theme.cardBackground + '80' }]}
         onPress={handleMuteToggle}
         hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
       >
-        <Ionicons
+          <Ionicons
           name={isMuted ? "volume-mute" : "volume-high"}
-          size={24}
+            size={24}
           color='white'
-        />
-      </TouchableOpacity>
-
+          />
+        </TouchableOpacity>
+        
       {/* Comments Modal */}
       <CommentsModal
         visible={showComments}
@@ -422,6 +424,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
   const [modalVisible, setModalVisible] = useState(false)
   const scaleAnim = useRef(new Animated.Value(0)).current
   const {theme} = useTheme()
+
   useEffect(() => {
     if (modalVisible) {
       Animated.spring(scaleAnim, {
@@ -438,13 +441,13 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
   return (
     <>
       <TouchableOpacity 
-        style={styles.categoryButton}
+        style={[styles.categoryButton, { backgroundColor: theme.cardBackground + '80' }]}
         onPress={() => setModalVisible(true)}
       >
-        <Text style={styles.categoryButtonText}>{selectedCategory}</Text>
+        <Text style={[styles.categoryButtonText, { color: theme.text, fontFamily: theme.font }]}>{selectedCategory}</Text>
         <Ionicons name="chevron-down" size={16} color={theme.text} />
-      </TouchableOpacity>
-      
+        </TouchableOpacity>
+        
       <Modal
         transparent
         visible={modalVisible}
@@ -452,47 +455,65 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
         onRequestClose={() => setModalVisible(false)}
       >
         <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
             <TouchableWithoutFeedback>
               <Animated.View 
                 style={[
                   styles.categoriesContainer,
                   {
-                    transform: [
-                      { scale: scaleAnim }
-                    ],
-                    opacity: scaleAnim
+                    transform: [{ scale: scaleAnim }],
+                    opacity: scaleAnim,
+                    backgroundColor: theme.cardBackground,
+                    borderColor: theme.border,
                   }
                 ]}
               >
-                {CATEGORIES.map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[
-                      styles.categoryItem,
-                      selectedCategory === category && styles.selectedCategoryItem
-                    ]}
-                    onPress={() => {
-                      onSelectCategory(category)
-                      setModalVisible(false)
-                    }}
+                <View style={styles.categoriesHeader}>
+                  <Text style={[styles.categoriesTitle, { color: theme.text, fontFamily: theme.titleFont }]}>Categories</Text>
+                  <TouchableOpacity 
+                    onPress={() => setModalVisible(false)}
+                    style={styles.closeButton}
                   >
-                    <Text 
+                    <Ionicons name="close" size={24} color={theme.text} />
+        </TouchableOpacity>
+                </View>
+                
+                <ScrollView 
+                  style={styles.categoriesScrollView}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.categoriesScrollContent}
+                >
+                  {CATEGORIES.map((category) => (
+                    <TouchableOpacity
+                      key={category}
                       style={[
-                        styles.categoryItemText,
-                        selectedCategory === category && styles.selectedCategoryItemText
+                        styles.categoryItem,
+                        selectedCategory === category && styles.selectedCategoryItem,
+                        { borderBottomColor: theme.border }
                       ]}
+                      onPress={() => {
+                        onSelectCategory(category)
+                        setModalVisible(false)
+                      }}
                     >
-                      {category}
-                    </Text>
-                    {selectedCategory === category && (
-                      <Ionicons name="checkmark" size={18} color={theme.accent} />
-                    )}
-                  </TouchableOpacity>
-                ))}
+                      <Text 
+                        style={[
+                          styles.categoryItemText,
+                          { color: theme.text, fontFamily: theme.font },
+                          selectedCategory === category && styles.selectedCategoryItemText
+                        ]}
+                      >
+                        {category}
+                      </Text>
+                      {selectedCategory === category && (
+                        <Ionicons name="checkmark" size={18} color={theme.accent} />
+                      )}
+        </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </Animated.View>
             </TouchableWithoutFeedback>
-    </View>
+      </View>
         </TouchableWithoutFeedback>
       </Modal>
     </>
@@ -510,7 +531,7 @@ const EndOfContentScreen = ({ onExploreArticles }) => {
       <Text style={[styles.endOfContentText, { color: theme.textSecondary, fontFamily: theme.font }]}>
         That's all the shorts available in this category.
       </Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.exploreArticlesButton, { backgroundColor: theme.accent }]}
         onPress={()=>router.push('/(tabs)/Articles')}
       >
@@ -544,11 +565,14 @@ const HomeScreen = () => {
   const [isVideosLoading, setIsVideosLoading] = useState(false)
   const {theme} = useTheme()
   // References
-  const flatListRef = useRef(null)
+  const scrollTimeoutRef = useRef(null);
+  const flatListRef = useRef(null);
   const viewabilityConfigRef = useRef({
-    itemVisiblePercentThreshold: 70, // Lower threshold to trigger sooner
-    minimumViewTime: 200, // Faster recognition of visible items
-  })
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 500,
+    waitForInteraction: true
+  });
+  const pagerRef = useRef(null);
 
   // Load user's city on mount
   useEffect(() => {
@@ -644,16 +668,17 @@ const HomeScreen = () => {
       setIsVideosLoading(true);
       if (reset) {
         setLastVisible(null);
+        setVideos([]); // Clear videos when resetting
       } else {
         setLoadingMore(true);
       }
       
-      console.log(`Fetching ${reset ? 'initial' : 'more'} videos...`);
+      console.log(`Fetching ${reset ? 'initial' : 'more'} videos for category: ${selectedCategory}`);
       
       // Base query
       const shortsRef = collection(db, 'shorts');
       
-      // Build query based on category and pagination
+      // Build query based on category
       let q;
       
       if (selectedCategory === "Regional") {
@@ -665,78 +690,54 @@ const HomeScreen = () => {
         }
         
         // Filter by user's city
-        if (lastVisible && !reset) {
-          q = query(
-            shortsRef, 
-            where('location', '==', userCity),
-            orderBy('createdAt', 'desc'), 
-            startAfter(lastVisible),
-            limit(VIDEOS_PER_BATCH)
-          );
-        } else {
-          q = query(
-            shortsRef, 
-            where('location', '==', userCity),
-            orderBy('createdAt', 'desc'), 
-            limit(VIDEOS_PER_BATCH)
-          );
-        }
+        q = query(
+          shortsRef, 
+          where('location', '==', userCity),
+          orderBy('createdAt', 'desc'), 
+          limit(VIDEOS_PER_BATCH)
+        );
       } else if (selectedCategory === "All") {
         // No category filter
-        if (lastVisible && !reset) {
-          q = query(
-            shortsRef, 
-            orderBy('createdAt', 'desc'), 
-            startAfter(lastVisible),
-            limit(VIDEOS_PER_BATCH)
-          );
-        } else {
-          q = query(
-            shortsRef, 
-            orderBy('createdAt', 'desc'), 
-            limit(VIDEOS_PER_BATCH)
-          );
-        }
+        q = query(
+          shortsRef, 
+          orderBy('createdAt', 'desc'), 
+          limit(VIDEOS_PER_BATCH)
+        );
       } else {
         // With category filter
-        if (lastVisible && !reset) {
-          q = query(
-            shortsRef, 
-            where('category', '==', selectedCategory),
-            orderBy('createdAt', 'desc'), 
-            startAfter(lastVisible),
-            limit(VIDEOS_PER_BATCH)
-          );
-        } else {
-          q = query(
-            shortsRef, 
-            where('category', '==', selectedCategory),
-            orderBy('createdAt', 'desc'), 
-            limit(VIDEOS_PER_BATCH)
-          );
-        }
+        q = query(
+          shortsRef, 
+          where('category', '==', selectedCategory),
+          orderBy('createdAt', 'desc'), 
+          limit(VIDEOS_PER_BATCH)
+        );
       }
       
-      const querySnapshot = await getDocs(q)
+      // Add pagination if not resetting
+      if (!reset && lastVisible) {
+        q = query(q, startAfter(lastVisible));
+      }
+      
+      const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
         if (reset) {
           setError(selectedCategory === "Regional" && !userCity 
             ? "Please set your city in profile to view regional content" 
-            : `No videos found in the ${selectedCategory} category.`)
-          setVideos([])
+            : `No videos found in the ${selectedCategory} category.`);
+          setVideos([]);
         }
-        setHasMoreVideos(false)
-        return
+        setHasMoreVideos(false);
+        return;
       }
       
       // Get last document for pagination
-      const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1]
-      setLastVisible(lastDoc)
+      const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+      setLastVisible(lastDoc);
       
       // Parse videos data
       const shortsData = querySnapshot.docs.map(doc => {
-        const data = doc.data()
+        const data = doc.data();
         return {
           id: doc.id,
           videoUrl: data.videoUrl,
@@ -748,30 +749,30 @@ const HomeScreen = () => {
           likes: data.likes || 0,
           comments: data.comments || 0,
           createdAt: data.createdAt?.toDate() || new Date()
-        }
-      })
+        };
+      });
       
-      console.log(`Loaded ${shortsData.length} videos`)
+      console.log(`Loaded ${shortsData.length} videos`);
       
       // Update videos state
       if (reset) {
-        setVideos(shortsData)
+        setVideos(shortsData);
       } else {
-        setVideos(prev => [...prev, ...shortsData])
+        setVideos(prev => [...prev, ...shortsData]);
       }
       
       // Check if we have more videos to load
-      setHasMoreVideos(shortsData.length >= VIDEOS_PER_BATCH)
-      setError(null)
+      setHasMoreVideos(shortsData.length >= VIDEOS_PER_BATCH);
+      setError(null);
     } catch (err) {
-      console.error('Error loading videos:', err)
-      setError('Failed to load videos: ' + err.message)
+      console.error('Error loading videos:', err);
+      setError('Failed to load videos: ' + err.message);
     } finally {
-      setLoading(false)
-      setLoadingMore(false)
-      setIsVideosLoading(false)
+      setLoading(false);
+      setLoadingMore(false);
+      setIsVideosLoading(false);
     }
-  }
+  };
   
   // Load more videos when reaching the end
   const handleLoadMore = () => {
@@ -782,12 +783,18 @@ const HomeScreen = () => {
   
   // Handle category selection
   const handleCategoryChange = (category) => {
-    setSelectedCategory(category)
-    setVideos([])
-    setLastVisible(null)
-    setHasMoreVideos(true)
-    setCurrentIndex(0)
-  }
+    console.log('Category changed to:', category);
+    setSelectedCategory(category);
+    setCurrentIndex(0);
+    setLastVisible(null);
+    setHasMoreVideos(true);
+    setError(null);
+    setLoading(true); // Set loading state immediately
+    
+    // Reset videos and load new ones
+    setVideos([]);
+    loadVideos(true);
+  };
   
   // Handle scroll event
   const handleScroll = (event) => {
@@ -796,13 +803,20 @@ const HomeScreen = () => {
     try {
       const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
       
-      // Calculate current index
+      // Calculate current index with rounding to ensure single item changes
       const scrollPosition = contentOffset.y;
-      const currentIdx = Math.floor(scrollPosition / height);
+      const currentIdx = Math.round(scrollPosition / height);
       
-      // Update current index if changed
+      // Only update if the index is valid and different from current
       if (currentIdx !== currentIndex && currentIdx >= 0 && currentIdx < videos.length) {
-        setCurrentIndex(currentIdx);
+        // Add debounce to prevent rapid changes
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        
+        scrollTimeoutRef.current = setTimeout(() => {
+          setCurrentIndex(currentIdx);
+        }, 100); // Small delay to ensure smooth transitions
       }
       
       // Check if close to bottom to load more
@@ -910,12 +924,12 @@ const HomeScreen = () => {
       Alert.alert('Error', 'Failed to save short. Please try again.');
       // Revert local state
       setSavedVideos(prev => ({
-        ...prev,
-        [videoId]: !prev[videoId]
+      ...prev,
+      [videoId]: !prev[videoId]
       }));
     }
   };
-  
+    
   // Handle comment added
   const handleCommentAdded = (videoId) => {
     setCommentCounts(prev => ({
@@ -932,6 +946,14 @@ const HomeScreen = () => {
   // Toggle play/pause
   const handleTogglePlayPause = () => {
     setTogglePlayPause(prev => !prev);
+  };
+  
+  // Handle page change
+  const handlePageChange = (event) => {
+    const newIndex = event.nativeEvent.position;
+    if (newIndex !== currentIndex) {
+      setCurrentIndex(newIndex);
+    }
   };
   
   // Render video item
@@ -1013,7 +1035,7 @@ const HomeScreen = () => {
             selectedCategory={selectedCategory}
             onSelectCategory={handleCategoryChange}
           />
-        </View>
+      </View>
         <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
           <ActivityIndicator size="large" color={theme.accent} />
           <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading News...</Text>
@@ -1040,8 +1062,8 @@ const HomeScreen = () => {
           <Text style={[styles.errorText, { color: theme.textSecondary, fontFamily: theme.font }]}>{error}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.accent }]} onPress={() => loadVideos(true)}>
             <Text style={[styles.retryButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
+      </View>
       </SafeAreaView>
     );
   }
@@ -1060,45 +1082,81 @@ const HomeScreen = () => {
         />
       </View>
       
-      {/* Video list */}
-      <FlatList
-        ref={flatListRef}
-        data={videos}
-        renderItem={renderVideo}
-        keyExtractor={(item) => String(item?.id || Math.random())}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        snapToInterval={height}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfigRef.current}
-        initialNumToRender={1}
-        maxToRenderPerBatch={2}
-        windowSize={3}
-        removeClippedSubviews={true}
-        getItemLayout={(data, index) => ({
-          length: height,
-          offset: height * index,
-          index,
-        })}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        ListFooterComponent={() => (
-          <>
-            {loadingMore && (
-              <View style={[styles.loadingMoreContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-                <ActivityIndicator color={theme.accent} />
-                <Text style={[styles.loadingMoreText, { color: theme.text, fontFamily: theme.font }]}>Loading more...</Text>
+      {/* Main content */}
+      {loading ? (
+        // Show loading state while fetching initial videos
+        <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading News...</Text>
+        </View>
+      ) : videos.length > 0 ? (
+        <>
+          <PagerView
+            ref={pagerRef}
+            style={styles.pagerView}
+            initialPage={0}
+            orientation="vertical"
+            onPageSelected={handlePageChange}
+            overdrag={false}
+            overScrollMode="never"
+            pageMargin={0}
+            transitionStyle="scroll"
+          >
+            {videos.map((item, index) => (
+              <View key={item.id} style={styles.pageContainer}>
+                <VideoItem
+                  item={{...item, comments: commentCounts[item.id] || item.comments || 0}}
+                  index={index}
+                  isCurrentVideo={index === currentIndex}
+                  isMuted={isMuted}
+                  setIsMuted={setIsMuted}
+                  isLiked={likedVideos[item.id] || false}
+                  likeCount={likeCounts[item.id] || 0}
+                  handleLike={handleLike}
+                  handleSave={handleSave}
+                  isSaved={savedVideos[item.id] || false}
+                  onCommentAdded={handleCommentAdded}
+                  togglePlayPause={togglePlayPause}
+                />
               </View>
-            )}
-            
-            {!hasMoreVideos && videos.length > 0 && (
+            ))}
+          </PagerView>
+
+          {/* Loading more indicator */}
+          {loadingMore && (
+            <View style={[styles.loadingMoreContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+              <ActivityIndicator color={theme.accent} />
+              <Text style={[styles.loadingMoreText, { color: theme.text, fontFamily: theme.font }]}>Loading more...</Text>
+            </View>
+          )}
+          
+          {/* End of content screen */}
+          {!hasMoreVideos && currentIndex === videos.length - 1 && (
+            <View style={[styles.endOfContentContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
               <EndOfContentScreen onExploreArticles={navigateToArticles} />
-            )}
-          </>
-        )}
-      />
+            </View>
+          )}
+        </>
+      ) : (
+        // Show error or empty state
+        <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
+          {error ? (
+            <>
+              <Ionicons name="cloud-offline" size={64} color={theme.accent} />
+              <Text style={[styles.errorTitle, { color: theme.text, fontFamily: theme.titleFont }]}>Error</Text>
+              <Text style={[styles.errorText, { color: theme.textSecondary, fontFamily: theme.font }]}>{error}</Text>
+              <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.accent }]} onPress={() => loadVideos(true)}>
+                <Text style={[styles.retryButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>Try Again</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <ActivityIndicator size="large" color={theme.accent} />
+              <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading News...</Text>
+            </>
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1258,49 +1316,63 @@ const styles = StyleSheet.create({
   categoryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
+    borderRadius: scale(16),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   categoryButtonText: {
-    color: '#FFF',
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: '600',
-    marginRight: 4,
+    marginRight: scale(4),
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   categoriesContainer: {
-    width: width * 0.8,
-    maxHeight: height * 0.6,
-    backgroundColor: '#121212',
-    borderRadius: 12,
-    padding: 16,
+    width: width * 0.85,
+    maxHeight: height * 0.7,
+    borderRadius: scale(16),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  categoriesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: scale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  categoriesTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: scale(4),
+  },
+  categoriesScrollView: {
+    maxHeight: height * 0.6,
+  },
+  categoriesScrollContent: {
+    paddingBottom: verticalScale(16),
   },
   categoryItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(16),
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   selectedCategoryItem: {
     backgroundColor: 'rgba(109, 76, 255, 0.1)',
   },
   categoryItemText: {
-    color: '#FFF',
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: '500',
   },
   selectedCategoryItemText: {
@@ -1379,5 +1451,13 @@ const styles = StyleSheet.create({
   videoDate: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
+  },
+  pagerView: {
+    flex: 1,
+    width: '100%',
+  },
+  pageContainer: {
+    flex: 1,
+    width: '100%',
   },
 })

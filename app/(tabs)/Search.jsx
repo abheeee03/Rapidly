@@ -318,7 +318,7 @@ const Search = () => {
         </View>
         
         {/* Filter Tabs */}
-        <View style={styles.filterContainer}>
+        {/* <View style={styles.filterContainer}>
           {SEARCH_CATEGORIES.map(category => (
             <TouchableOpacity
               key={category.id}
@@ -347,7 +347,7 @@ const Search = () => {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </View> */}
       </View>
       
       {/* Loading Indicator */}

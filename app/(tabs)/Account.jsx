@@ -16,7 +16,7 @@ const Account = () => {
   useEffect(() => {
     // If user is not authenticated, redirect to login
     if (!isLoading && !isAuthenticated) {
-      router.push('/screens/Auth/Login');
+      router.push('/screens/LandingScreen');
     } else if (user) {
       loadSavedContentCount();
     }
@@ -59,7 +59,7 @@ const Account = () => {
   const handleLogout = async () => {
     const result = await logout();
     if (result.success) {
-      router.push('/screens/Auth/Login');
+      router.push('/screens/LandingScreen');
     }
   };
 

@@ -6,6 +6,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Entypo from '@expo/vector-icons/Entypo';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { useTheme } from '../../context/ThemeContext';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const MainScreenTabs = () => {
   const { theme } = useTheme();
@@ -30,8 +31,8 @@ const MainScreenTabs = () => {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
-            <Ionicons
-              name={focused ? 'home' : 'home-outline'}
+            <AntDesign 
+              name='home'
               size={24} 
               color={focused ? theme.accent : theme.text}
             />
@@ -60,8 +61,8 @@ const MainScreenTabs = () => {
         name="Articles"
         options={{
           tabBarIcon: ({ focused }) => (
-            <Ionicons
-              name={focused ? 'newspaper' : 'newspaper-outline'}
+            <MaterialIcons
+              name='article'
               size={24}
               color={focused ? theme.accent : theme.text}
             />

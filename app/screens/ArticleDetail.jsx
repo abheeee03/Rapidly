@@ -7,6 +7,8 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { db } from '../../Utlis/firebase'
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { scale, verticalScale, moderateScale } from 'react-native-size-matters'
+import { BlurView } from 'expo-blur'
 
 const { width, height } = Dimensions.get('window')
 
@@ -125,8 +127,11 @@ const ArticleDetail = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
       
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Image */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Hero Image with Blur Effect */}
         <View style={styles.imageContainer}>
           <Image 
             source={{ uri: article.coverImage }}
@@ -134,34 +139,41 @@ const ArticleDetail = () => {
             resizeMode="cover"
           />
           
-          {/* Back Button */}
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={handleBack}
-          >
-            <Ionicons name="chevron-back" size={24} color="white" />
-          </TouchableOpacity>
+          {/* Blurred Overlay */}
+          <BlurView intensity={20} style={styles.blurOverlay}>
+            <View style={styles.headerButtons}>
+              {/* Back Button */}
+              <TouchableOpacity 
+                style={[styles.headerButton, { backgroundColor: theme.cardBackground + '80' }]}
+                onPress={handleBack}
+              >
+                <Ionicons name="chevron-back" size={24} color={theme.text} />
+              </TouchableOpacity>
 
-          {/* Save Button */}
-          <TouchableOpacity 
-            style={styles.saveButton}
-            onPress={handleSaveArticle}
-            disabled={loading}
-          >
-            <Ionicons 
-              name={isSaved ? "bookmark" : "bookmark-outline"} 
-              size={24} 
-              color="white" 
-            />
-          </TouchableOpacity>
+              {/* Save Button */}
+              <TouchableOpacity 
+                style={[styles.headerButton, { backgroundColor: theme.cardBackground + '80' }]}
+                onPress={handleSaveArticle}
+                disabled={loading}
+              >
+                <Ionicons 
+                  name={isSaved ? "bookmark" : "bookmark-outline"} 
+                  size={24} 
+                  color={theme.text} 
+                />
+              </TouchableOpacity>
+            </View>
+          </BlurView>
         </View>
         
         {/* Article Content */}
-        <View style={styles.contentContainer}>
+        <View style={[styles.contentContainer, { backgroundColor: theme.background }]}>
           {/* Category */}
-          <Text style={[styles.category, { color: theme.accent, fontFamily: theme.font }]}>
-            {article.category}
-          </Text>
+          <View style={[styles.categoryContainer, { backgroundColor: theme.accent + '20' }]}>
+            <Text style={[styles.category, { color: theme.accent, fontFamily: theme.font }]}>
+              {article.category}
+            </Text>
+          </View>
           
           {/* Title */}
           <Text style={[styles.title, { color: theme.text, fontFamily: theme.titleFont }]}>
@@ -175,14 +187,14 @@ const ArticleDetail = () => {
           
           {/* Article Stats */}
           <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
+            <View style={[styles.statItem, { backgroundColor: theme.cardBackground }]}>
               <Ionicons name="heart-outline" size={20} color={theme.textSecondary} />
               <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
                 {article.likes}
               </Text>
             </View>
             
-            <View style={styles.statItem}>
+            <View style={[styles.statItem, { backgroundColor: theme.cardBackground }]}>
               <Ionicons name="eye-outline" size={20} color={theme.textSecondary} />
               <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
                 {article.views}
@@ -191,7 +203,11 @@ const ArticleDetail = () => {
 
             {/* Save Button for Text */}
             <TouchableOpacity 
-              style={styles.saveStatItem} 
+              style={[
+                styles.saveStatItem, 
+                { backgroundColor: theme.cardBackground },
+                isSaved && { backgroundColor: theme.accent + '20' }
+              ]} 
               onPress={handleSaveArticle}
               disabled={loading}
             >
@@ -236,86 +252,103 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   imageContainer: {
     position: 'relative',
     width: width,
-    height: height * 0.35,
+    height: height * 0.4,
   },
   coverImage: {
     width: '100%',
     height: '100%',
   },
-  backButton: {
+  blurOverlay: {
     position: 'absolute',
-    top: 50,
-    left: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: verticalScale(50),
   },
-  saveButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+  headerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: scale(20),
+  },
+  headerButton: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
   contentContainer: {
-    padding: 20,
+    flex: 1,
+    padding: scale(20),
+    borderTopLeftRadius: scale(24),
+    borderTopRightRadius: scale(24),
+    marginTop: verticalScale(-20),
+  },
+  categoryContainer: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
+    borderRadius: scale(20),
+    marginBottom: verticalScale(12),
   },
   category: {
-    fontSize: 14,
-    marginBottom: 8,
+    fontSize: moderateScale(14),
+    fontWeight: '600',
   },
   title: {
-    fontSize: 24,
+    fontSize: moderateScale(28),
     fontWeight: 'bold',
-    marginBottom: 8,
-    lineHeight: 32,
+    marginBottom: verticalScale(8),
+    lineHeight: moderateScale(36),
   },
   date: {
-    fontSize: 14,
-    marginBottom: 16,
+    fontSize: moderateScale(14),
+    marginBottom: verticalScale(16),
   },
   statsContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: verticalScale(20),
+    flexWrap: 'wrap',
+    gap: scale(10),
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    borderRadius: scale(20),
   },
   saveStatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    borderRadius: scale(20),
     marginLeft: 'auto',
   },
   statText: {
-    marginLeft: 5,
-    fontSize: 14,
+    marginLeft: scale(5),
+    fontSize: moderateScale(14),
   },
   bodyContainer: {
-    marginTop: 16,
+    marginTop: verticalScale(16),
   },
   description: {
-    fontSize: 16,
+    fontSize: moderateScale(18),
     fontWeight: '500',
-    marginBottom: 16,
-    lineHeight: 24,
+    marginBottom: verticalScale(16),
+    lineHeight: moderateScale(28),
   },
   content: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: moderateScale(16),
+    lineHeight: moderateScale(24),
   }
 })
