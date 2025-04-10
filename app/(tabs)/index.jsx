@@ -13,7 +13,6 @@ import { router } from 'expo-router'
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters'
 import Animated, { FadeIn, SlideInRight, runOnJS } from 'react-native-reanimated'
 import { GestureDetector, Gesture } from 'react-native-gesture-handler'
-import { Video } from 'expo-av'
 
 const { width, height } = Dimensions.get('window')
 
@@ -49,7 +48,6 @@ const VideoItem = memo(({
   onCommentAdded,
 }) => {
   const { theme } = useTheme()
-  const videoRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -57,17 +55,82 @@ const VideoItem = memo(({
   const [showComments, setShowComments] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const controlsTimeout = useRef(null)
+  
+  // Use the new useVideoPlayer hook from expo-video
+  const videoUrl = item?.videoUrl || '';
+  const player = useVideoPlayer(videoUrl, playerInstance => {
+    if (playerInstance) {
+      playerInstance.loop = true;
+      playerInstance.muted = isMuted;
+      setIsLoading(false);
+      
+      // Set up time update handler
+      playerInstance.onTimeUpdate = () => {
+        if (playerInstance.duration > 0) {
+          const newProgress = playerInstance.currentTime / playerInstance.duration;
+          setProgress(newProgress);
+        }
+      };
+      
+      // Set up load event
+      playerInstance.onLoadedMetadata = () => {
+        setDuration(playerInstance.duration * 1000);
+        setIsLoading(false);
+      };
+      
+      // Set up error event
+      playerInstance.onError = (error) => {
+        console.log('Video error:', error);
+        setIsLoading(false);
+      };
+    }
+  });
+
+  // Pause video when screen loses focus
+  useFocusEffect(
+    useCallback(() => {
+      // When screen comes into focus
+      if (isCurrentVideo && player) {
+        setIsPlaying(true);
+        try {
+          player.play().catch(err => console.log('Error resuming video after focus:', err));
+        } catch (error) {
+          console.log('Error in focus effect:', error);
+        }
+      }
+      
+      // When screen loses focus
+      return () => {
+        if (player) {
+          setIsPlaying(false);
+          try {
+            player.pause().catch(err => console.log('Error pausing video on blur:', err));
+          } catch (error) {
+            console.log('Error in blur effect:', error);
+          }
+        }
+      };
+    }, [isCurrentVideo, player])
+  );
 
   useEffect(() => {
     if (isCurrentVideo) {
       setIsPlaying(true)
-      if (videoRef.current) {
-        videoRef.current.playAsync().catch(err => console.log('Error playing video:', err))
+      if (player) {
+        try {
+          player.play().catch(err => console.log('Error playing video:', err));
+        } catch (error) {
+          console.log('Error in play effect:', error);
+        }
       }
-    } else {
+          } else {
       setIsPlaying(false)
-      if (videoRef.current) {
-        videoRef.current.pauseAsync().catch(err => console.log('Error pausing video:', err))
+      if (player) {
+        try {
+          player.pause().catch(err => console.log('Error pausing video:', err));
+        } catch (error) {
+          console.log('Error in pause effect:', error);
+        }
       }
     }
 
@@ -76,33 +139,24 @@ const VideoItem = memo(({
         clearTimeout(controlsTimeout.current)
       }
     }
-  }, [isCurrentVideo])
-
-  const handlePlaybackStatusUpdate = (status) => {
-    if (status.isLoaded) {
-      setIsLoading(false)
-      if (status.didJustFinish) {
-        // Video finished playing
-        setIsPlaying(false)
-        setProgress(0)
-        if (videoRef.current) {
-          videoRef.current.replayAsync().catch(err => console.log('Error replaying video:', err))
-        }
-      } else {
-        // Update progress
-        const newProgress = status.positionMillis / status.durationMillis
-        setProgress(newProgress)
-      }
+  }, [isCurrentVideo, player])
+  
+  // Update muted state when isMuted changes
+  useEffect(() => {
+    if (player) {
+      player.muted = isMuted;
     }
-  }
+  }, [isMuted, player]);
 
   const handleVideoPress = () => {
     setIsPlaying(!isPlaying)
     
-    if (isPlaying) {
-      videoRef.current?.pauseAsync()
-    } else {
-      videoRef.current?.playAsync()
+    if (player) {
+      if (isPlaying) {
+        player.pause();
+        } else {
+        player.play();
+      }
     }
     
     showControlsTemporarily()
@@ -142,34 +196,27 @@ const VideoItem = memo(({
         onPress={handleVideoPress}
         style={styles.videoWrapper}
       >
-        <Video
-          ref={videoRef}
-          source={{ uri: item.videoUrl }}
-          style={styles.video}
+        <VideoView 
+          style={styles.video} 
+          player={player}
+              allowsFullscreen={false}
+          nativeControls={false}
           resizeMode="contain"
-          shouldPlay={isCurrentVideo}
-          isLooping={true}
-          isMuted={isMuted}
-          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-          onLoad={(status) => {
-            setDuration(status.durationMillis)
-            setIsLoading(false)
-          }}
-          onError={(error) => {
-            console.log('Video error:', error)
-            setIsLoading(false)
-          }}
         />
         
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="white" />
-          </View>
-        )}
-        
+      </View>
+          )}
+          
         {/* Video info - simplified to just title */}
         <View style={styles.videoInfo}>
-          <Text style={styles.videoTitle} numberOfLines={1}>
+          <Text 
+            style={styles.videoTitle} 
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
             {item.title || 'Untitled Video'}
           </Text>
         </View>
@@ -180,7 +227,7 @@ const VideoItem = memo(({
             style={[
               styles.progressBarFill, 
               { width: `${progress * 100}%`, backgroundColor: theme.accent }
-            ]} 
+            ]}
           />
         </View>
         
@@ -191,9 +238,9 @@ const VideoItem = memo(({
             ) : (
               <Ionicons name="play-circle" size={80} color="rgba(255,255,255,0.8)" />
             )}
-          </View>
-        )}
-        
+      </View>
+      )}
+      
         {/* Category badge */}
         {item.category && (
           <View style={[styles.categoryBadge, { backgroundColor: theme.accent + 'AA' }]}>
@@ -203,7 +250,7 @@ const VideoItem = memo(({
         
         {/* Action buttons - with added share button */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity 
+        <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => handleLike(item.id)}
           >
@@ -213,27 +260,27 @@ const VideoItem = memo(({
               color={isLiked ? "red" : "white"} 
             />
             <Text style={styles.actionText}>{likeCount}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => setShowComments(true)}
-          >
+          onPress={() => setShowComments(true)}
+        >
             <Ionicons name="chatbubble-outline" size={24} color="white" />
             <Text style={styles.actionText}>{item.comments || 0}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => handleSave(item.id)}
-          >
+          onPress={() => handleSave(item.id)}
+        >
             <Ionicons 
-              name={isSaved ? "bookmark" : "bookmark-outline"} 
+            name={isSaved ? "bookmark" : "bookmark-outline"}
               size={24} 
               color={isSaved ? theme.accent : "white"} 
-            />
+          />
             <Text style={styles.actionText}>Save</Text>
-          </TouchableOpacity>
+        </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.actionButton}
@@ -257,22 +304,22 @@ const VideoItem = memo(({
             <Text style={styles.actionText}>Share</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity 
+      <TouchableOpacity
             style={styles.actionButton}
             onPress={() => setIsMuted(!isMuted)}
-          >
-            <Ionicons 
-              name={isMuted ? "volume-mute" : "volume-high"} 
-              size={24} 
+      >
+          <Ionicons
+          name={isMuted ? "volume-mute" : "volume-high"}
+            size={24}
               color="white" 
-            />
+          />
             <Text style={styles.actionText}>
               {isMuted ? "Unmute" : "Mute"}
             </Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
-      
+        </TouchableOpacity>
+        
       {/* Comments Modal */}
       <CommentsModal
         visible={showComments}
@@ -312,7 +359,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
       >
         <Text style={[styles.categoryButtonText, { color: theme.text, fontFamily: theme.font }]}>{selectedCategory}</Text>
         <Ionicons name="chevron-down" size={16} color={theme.text} />
-      </TouchableOpacity>
+        </TouchableOpacity>
         
       <Modal
         transparent
@@ -341,7 +388,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
                     style={styles.closeButton}
                   >
                     <Ionicons name="close" size={24} color={theme.text} />
-                  </TouchableOpacity>
+        </TouchableOpacity>
                 </View>
                 
                 <ScrollView 
@@ -374,12 +421,12 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
                       {selectedCategory === category && (
                         <Ionicons name="checkmark" size={18} color={theme.accent} />
                       )}
-                    </TouchableOpacity>
+        </TouchableOpacity>
                   ))}
                 </ScrollView>
               </RNAnimated.View>
             </TouchableWithoutFeedback>
-          </View>
+      </View>
         </TouchableWithoutFeedback>
       </Modal>
     </>
@@ -421,7 +468,7 @@ const EndScreen = ({ onRetry, theme, navigation }) => (
         <Ionicons name="refresh-outline" size={24} color="white" style={styles.buttonIcon} />
         <Text style={[styles.endScreenButtonText, { color: 'white', fontFamily: theme.font }]}>
           Watch Again
-        </Text>
+      </Text>
       </TouchableOpacity>
       
       <TouchableOpacity
@@ -496,12 +543,12 @@ const HomeScreen = () => {
           const savedMap = {}
           
           savedSnapshot.docs.forEach(doc => {
-            const data = doc.data()
+          const data = doc.data()
             savedMap[data.shortId] = true
-          })
+        })
           
           setSavedVideos(savedMap)
-        } catch (error) {
+    } catch (error) {
           console.error('Error loading user interactions:', error)
         }
       }
@@ -519,7 +566,7 @@ const HomeScreen = () => {
   useEffect(() => {
     if (selectedCategory !== 'All') {
       fetchVideosByCategory(true)
-    } else {
+      } else {
       fetchVideos(true)
     }
   }, [selectedCategory])
@@ -544,13 +591,13 @@ const HomeScreen = () => {
       if (reset || !lastDoc) {
         q = query(
           collection(db, 'shorts'),
-          orderBy('createdAt', 'desc'),
+          orderBy('createdAt', 'desc'), 
           limit(VIDEOS_PER_BATCH)
         )
       } else {
         q = query(
           collection(db, 'shorts'),
-          orderBy('createdAt', 'desc'),
+          orderBy('createdAt', 'desc'), 
           startAfter(lastDoc),
           limit(VIDEOS_PER_BATCH)
         )
@@ -700,13 +747,13 @@ const HomeScreen = () => {
       const newLikeState = !isCurrentlyLiked
       
       // Optimistic update
-      setLikedVideos(prev => ({
-        ...prev,
+    setLikedVideos(prev => ({
+      ...prev,
         [videoId]: newLikeState
       }))
-      
-      setLikeCounts(prev => ({
-        ...prev,
+    
+    setLikeCounts(prev => ({
+      ...prev,
         [videoId]: (prev[videoId] || 0) + (newLikeState ? 1 : -1)
       }))
       
@@ -761,7 +808,7 @@ const HomeScreen = () => {
     try {
       const isCurrentlySaved = savedVideos[videoId] || false
       const newSaveState = !isCurrentlySaved
-      
+
       // Optimistic update
       setSavedVideos(prev => ({
         ...prev,
@@ -770,7 +817,7 @@ const HomeScreen = () => {
       
       // Update in Firestore
       const userSavedRef = collection(db, 'users', user.uid, 'savedShorts')
-      
+
       if (newSaveState) {
         await addDoc(userSavedRef, {
           shortId: videoId,
@@ -789,14 +836,14 @@ const HomeScreen = () => {
       
       // Revert optimistic update
       setSavedVideos(prev => ({
-        ...prev,
-        [videoId]: !prev[videoId]
+      ...prev,
+      [videoId]: !prev[videoId]
       }))
       
       Alert.alert('Error', 'Failed to save video. Please try again.')
     }
   }
-
+    
   // Handle comment added
   const handleCommentAdded = (videoId) => {
     const videoIndex = videos.findIndex(v => v.id === videoId)
@@ -834,11 +881,11 @@ const HomeScreen = () => {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
         <StatusBar style={theme.dark ? 'light' : 'dark'} />
-        <ActivityIndicator size="large" color={theme.accent} />
+          <ActivityIndicator size="large" color={theme.accent} />
         <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>
           Loading Latest News...
         </Text>
-      </View>
+        </View>
     )
   }
 
@@ -863,7 +910,7 @@ const HomeScreen = () => {
               </Text>
               <MaterialIcons name="arrow-drop-down" size={24} color={theme.text} />
             </TouchableOpacity>
-          </View>
+        </View>
         </View>
         
         <View style={styles.emptyContainer}>
@@ -884,14 +931,15 @@ const HomeScreen = () => {
               <Text style={[styles.viewAllButtonText, { color: 'white', fontFamily: theme.font }]}>
                 View All Videos
               </Text>
-            </TouchableOpacity>
+        </TouchableOpacity>
           )}
-        </View>
+      </View>
         
         <Modal
           visible={showCategoryModal}
           transparent={true}
           animationType="fade"
+          statusBarTranslucent
           onRequestClose={() => setShowCategoryModal(false)}
         >
           <TouchableOpacity 
@@ -899,45 +947,78 @@ const HomeScreen = () => {
             activeOpacity={1}
             onPress={() => setShowCategoryModal(false)}
           >
-            <View 
-              style={[
-                styles.categoryModalContent, 
-                { 
-                  backgroundColor: theme.cardBackground,
-                  top: Platform.OS === 'ios' ? 130 : 150,
-                  right: 20,
-                  maxHeight: height * 0.6,
-                }
-              ]}
+            <Animated.View 
+              style={styles.centeredModalContainer}
+              entering={FadeIn.duration(300)}
             >
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {categories.map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[
-                      styles.categoryOption,
-                      selectedCategory === category && { backgroundColor: theme.accent + '20' }
-                    ]}
-                    onPress={() => handleCategorySelect(category)}
+              <View 
+                style={[
+                  styles.modernCategoryModal, 
+                  { backgroundColor: theme.cardBackground }
+                ]}
+              >
+                <View style={styles.categoryModalHeader}>
+                  <Text style={[styles.categoryModalTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+                    Select Category
+                  </Text>
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => setShowCategoryModal(false)}
                   >
-                    <Text
-                      style={[
-                        styles.categoryOptionText,
-                        { 
-                          fontFamily: theme.font,
-                          color: selectedCategory === category ? theme.accent : theme.text
-                        }
-                      ]}
-                    >
-                      {category}
-                    </Text>
-                    {selectedCategory === category && (
-                      <Ionicons name="checkmark" size={18} color={theme.accent} />
-                    )}
+                    <Ionicons name="close-circle" size={24} color={theme.accent} />
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+                </View>
+                
+                <View style={styles.categoryDivider} />
+                
+                <ScrollView 
+                  style={styles.categoryScrollView} 
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.categoryScrollContent}
+                >
+                  {categories.map((category, index) => (
+                    <Animated.View
+                      key={category}
+                      entering={FadeIn.delay(index * 50).duration(200)}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.modernCategoryOption,
+                          selectedCategory === category && { 
+                            backgroundColor: theme.accent + '15',
+                            borderLeftColor: theme.accent,
+                            borderLeftWidth: 4,
+                          }
+                        ]}
+                        onPress={() => handleCategorySelect(category)}
+                      >
+                        <View style={styles.categoryContent}>
+                          <Ionicons 
+                            name={getCategoryIcon(category)} 
+                            size={22} 
+                            color={selectedCategory === category ? theme.accent : theme.textSecondary} 
+                          />
+                          <Text
+                            style={[
+                              styles.modernCategoryText,
+                              { 
+                                fontFamily: theme.font,
+                                color: selectedCategory === category ? theme.accent : theme.text
+                              }
+                            ]}
+                          >
+                            {category}
+                          </Text>
+                        </View>
+                        {selectedCategory === category && (
+                          <Ionicons name="checkmark-circle" size={22} color={theme.accent} />
+                        )}
+                      </TouchableOpacity>
+                    </Animated.View>
+                  ))}
+                </ScrollView>
+              </View>
+            </Animated.View>
           </TouchableOpacity>
         </Modal>
       </SafeAreaView>
@@ -972,18 +1053,18 @@ const HomeScreen = () => {
         data={videos}
         keyExtractor={(item, index) => `video-${item.id}-${index}`}
         renderItem={({ item, index }) => (
-          <VideoItem
+                <VideoItem
             item={item}
-            index={index}
-            isCurrentVideo={index === currentIndex}
-            isMuted={isMuted}
-            setIsMuted={setIsMuted}
-            isLiked={likedVideos[item.id] || false}
-            likeCount={likeCounts[item.id] || 0}
-            handleLike={handleLike}
-            handleSave={handleSave}
-            isSaved={savedVideos[item.id] || false}
-            onCommentAdded={handleCommentAdded}
+                  index={index}
+                  isCurrentVideo={index === currentIndex}
+                  isMuted={isMuted}
+                  setIsMuted={setIsMuted}
+                  isLiked={likedVideos[item.id] || false}
+                  likeCount={likeCounts[item.id] || 0}
+                  handleLike={handleLike}
+                  handleSave={handleSave}
+                  isSaved={savedVideos[item.id] || false}
+                  onCommentAdded={handleCommentAdded}
           />
         )}
         pagingEnabled
@@ -1021,14 +1102,15 @@ const HomeScreen = () => {
             <Text style={[styles.loadingMoreText, { color: theme.textSecondary, fontFamily: theme.font }]}>
               Loading more videos...
             </Text>
-          </View>
-        )}
+            </View>
+          )}
       />
       
       <Modal
         visible={showCategoryModal}
         transparent={true}
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setShowCategoryModal(false)}
       >
         <TouchableOpacity 
@@ -1036,45 +1118,78 @@ const HomeScreen = () => {
           activeOpacity={1}
           onPress={() => setShowCategoryModal(false)}
         >
-          <View 
-            style={[
-              styles.categoryModalContent, 
-              { 
-                backgroundColor: theme.cardBackground,
-                top: Platform.OS === 'ios' ? 130 : 150,
-                right: 20,
-                maxHeight: height * 0.6,
-              }
-            ]}
+          <Animated.View 
+            style={styles.centeredModalContainer}
+            entering={FadeIn.duration(300)}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category}
-                  style={[
-                    styles.categoryOption,
-                    selectedCategory === category && { backgroundColor: theme.accent + '20' }
-                  ]}
-                  onPress={() => handleCategorySelect(category)}
+            <View 
+              style={[
+                styles.modernCategoryModal, 
+                { backgroundColor: theme.cardBackground }
+              ]}
+            >
+              <View style={styles.categoryModalHeader}>
+                <Text style={[styles.categoryModalTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+                  Select Category
+                </Text>
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => setShowCategoryModal(false)}
                 >
-                  <Text
-                    style={[
-                      styles.categoryOptionText,
-                      { 
-                        fontFamily: theme.font,
-                        color: selectedCategory === category ? theme.accent : theme.text
-                      }
-                    ]}
-                  >
-                    {category}
-                  </Text>
-                  {selectedCategory === category && (
-                    <Ionicons name="checkmark" size={18} color={theme.accent} />
-                  )}
+                  <Ionicons name="close-circle" size={24} color={theme.accent} />
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+              </View>
+              
+              <View style={styles.categoryDivider} />
+              
+              <ScrollView 
+                style={styles.categoryScrollView} 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.categoryScrollContent}
+              >
+                {categories.map((category, index) => (
+                  <Animated.View
+                    key={category}
+                    entering={FadeIn.delay(index * 50).duration(200)}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.modernCategoryOption,
+                        selectedCategory === category && { 
+                          backgroundColor: theme.accent + '15',
+                          borderLeftColor: theme.accent,
+                          borderLeftWidth: 4,
+                        }
+                      ]}
+                      onPress={() => handleCategorySelect(category)}
+                    >
+                      <View style={styles.categoryContent}>
+                        <Ionicons 
+                          name={getCategoryIcon(category)} 
+                          size={22} 
+                          color={selectedCategory === category ? theme.accent : theme.textSecondary} 
+                        />
+                        <Text
+                          style={[
+                            styles.modernCategoryText,
+                            { 
+                              fontFamily: theme.font,
+                              color: selectedCategory === category ? theme.accent : theme.text
+                            }
+                          ]}
+                        >
+                          {category}
+                        </Text>
+                      </View>
+                      {selectedCategory === category && (
+                        <Ionicons name="checkmark-circle" size={22} color={theme.accent} />
+                      )}
+                    </TouchableOpacity>
+                  </Animated.View>
+                ))}
+              </ScrollView>
+            </View>
+          </Animated.View>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
@@ -1179,8 +1294,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 75, // Just above progress bar
     left: 16,
-    right: 70,
+    right: 80, // Increased space for action buttons
     zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)', // Semi-transparent background
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
   videoTitle: {
     color: 'white',
@@ -1189,6 +1308,7 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+    lineHeight: 20, // Proper line height for 2 lines
   },
   actionButtons: {
     position: 'absolute',
@@ -1258,29 +1378,86 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  categoryModalContent: {
-    position: 'absolute',
-    width: 180,
-    borderRadius:.12,
+  centeredModalContainer: {
+    width: '85%',
+    maxHeight: height * 0.7,
+    borderRadius: 16,
+    overflow: 'hidden',
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  modernCategoryModal: {
+    borderRadius: 16,
     overflow: 'hidden',
   },
-  categoryOption: {
+  categoryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  categoryModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  categoryDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    marginHorizontal: 12,
+  },
+  categoryScrollView: {
+    maxHeight: height * 0.5,
+  },
+  categoryScrollContent: {
+    paddingVertical: 8,
+  },
+  modernCategoryOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginHorizontal: 8,
+    marginVertical: 4,
+    borderRadius: 10,
   },
-  categoryOptionText: {
-    fontSize: 15,
+  categoryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modernCategoryText: {
+    fontSize: 16,
+    marginLeft: 12,
   },
 })
+
+// Helper function for category icons - add this before the HomeScreen component
+const getCategoryIcon = (category) => {
+  switch(category.toLowerCase()) {
+    case 'all': return 'grid-outline';
+    case 'politics': return 'person-outline';
+    case 'technology': return 'hardware-chip-outline';
+    case 'health': return 'fitness-outline';
+    case 'business': return 'briefcase-outline';
+    case 'entertainment': return 'film-outline';
+    case 'sports': return 'basketball-outline';
+    case 'science': return 'flask-outline';
+    case 'education': return 'school-outline';
+    case 'world': return 'globe-outline';
+    case 'environment': return 'leaf-outline';
+    case 'finance': return 'cash-outline';
+    case 'regional': return 'location-outline';
+    default: return 'newspaper-outline';
+  }
+};
