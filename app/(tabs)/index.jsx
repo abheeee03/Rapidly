@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Dimensions, TouchableOpacity, Image, SafeAreaView, Animated, TouchableWithoutFeedback, Alert, Modal, ScrollView } from 'react-native'
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Dimensions, TouchableOpacity, Image, SafeAreaView, Animated as RNAnimated, TouchableWithoutFeedback, Alert, Modal, ScrollView, Platform } from 'react-native'
 import React, { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useVideoPlayer, VideoView } from 'expo-video'
@@ -11,7 +11,9 @@ import CommentsModal from '../components/CommentsModal'
 import {useTheme} from '../../context/ThemeContext'
 import { router } from 'expo-router'
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters'
-import PagerView from 'react-native-pager-view'
+import Animated, { FadeIn, SlideInRight, runOnJS } from 'react-native-reanimated'
+import { GestureDetector, Gesture } from 'react-native-gesture-handler'
+import { Video } from 'expo-av'
 
 const { width, height } = Dimensions.get('window')
 
@@ -32,7 +34,7 @@ const CATEGORIES = [
 // Number of videos to load in each batch
 const VIDEOS_PER_BATCH = 5
 
-// Completely rewritten VideoItem component with simplified approach
+// Completely rewritten VideoItem component with improved functionality
 const VideoItem = memo(({ 
   item, 
   index, 
@@ -45,389 +47,253 @@ const VideoItem = memo(({
   handleSave,
   isSaved,
   onCommentAdded,
-  togglePlayPause,
 }) => {
-  const [isReady, setIsReady] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
+  const { theme } = useTheme()
+  const videoRef = useRef(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [showControls, setShowControls] = useState(false)
   const [showComments, setShowComments] = useState(false)
-  const [loadError, setLoadError] = useState(false)
-  const playerRef = useRef(null)
-  const fadeAnim = useRef(new Animated.Value(0)).current
-  const pauseIconAnim = useRef(new Animated.Value(0)).current
-  const heartAnimation = useRef(new Animated.Value(1)).current
-  const scaleAnim = useRef(new Animated.Value(isCurrentVideo ? 1 : 0.95)).current
-  const {theme} = useTheme()
+  const [isLoading, setIsLoading] = useState(true)
+  const controlsTimeout = useRef(null)
 
-  // Add focus effect to handle video pausing
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        if (playerRef.current) {
-          try {
-            playerRef.current.pause();
-            setIsPaused(true);
-          } catch (error) {
-            console.log(`Error pausing video ${index}:`, error);
-          }
-        }
-      };
-    }, [])
-  );
-
-  // Console log video details for debugging
-  useEffect(() => {
-    if (item) {
-      console.log(`Video ${index} details:`, {
-        id: item.id,
-        url: item.videoUrl,
-        isCurrentVideo,
-        isPaused
-      });
-    }
-  }, [item, index, isCurrentVideo, isPaused]);
-
-  // Simple URL validation - don't use URL format validation
-  const videoUrl = useMemo(() => {
-    if (!item || !item.videoUrl) return '';
-    return item.videoUrl;
-  }, [item]);
-  
-  // Initialize player with validated URL - ensure immediate autoplay
-  const player = useVideoPlayer(videoUrl, playerInstance => {
-    if (!playerInstance) {
-      console.log(`Failed to initialize player for video ${index}`);
-      return;
-    }
-    
-    try {
-      console.log(`Player successfully initialized for video ${index}`);
-      // Set basic properties
-      playerInstance.loop = true;
-      playerInstance.muted = isMuted;
-      
-      // Store reference and update state
-      playerRef.current = playerInstance;
-      setIsReady(true);
-      setLoadError(false); // Important: reset load error flag
-      setIsPaused(false);
-      
-      // Auto-play if this is the current video
-      if (isCurrentVideo) {
-        console.log(`Current video ${index} detected, forcing play`);
-        playerInstance.play()
-          .then(() => console.log(`Video ${index} playing successfully`))
-          .catch(err => console.log(`Error playing video ${index}:`, err));
-        }
-      } catch (error) {
-      console.log('Error initializing player:', error);
-      }
-  });
-
-  // Restore smooth animation effect when videos become current with faster timing
   useEffect(() => {
     if (isCurrentVideo) {
-      console.log(`Video ${index} became current, animating in`);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 150,
-          useNativeDriver: true
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 5,
-          tension: 50,
-          useNativeDriver: true
-        })
-      ]).start();
-      
-      // Force play when video becomes current
-      if (playerRef.current) {
-        try {
-          console.log(`Forcing play for video ${index} as it became current`);
-          playerRef.current.play().catch(err => console.log('Error playing when current:', err));
-          setIsPaused(false); // Ensure state is synced
-        } catch (error) {
-          console.log('Error in current video play effect:', error);
-        }
+      setIsPlaying(true)
+      if (videoRef.current) {
+        videoRef.current.playAsync().catch(err => console.log('Error playing video:', err))
       }
-          } else {
-      console.log(`Video ${index} is no longer current, animating out`);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0.5,
-          duration: 100,
-          useNativeDriver: true
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 0.95,
-          friction: 5,
-          tension: 50,
-          useNativeDriver: true
-        })
-      ]).start();
-      
-      // Ensure non-current videos are paused to save resources
-      if (playerRef.current) {
-        try {
-          playerRef.current.pause().catch(err => console.log('Error pausing when not current:', err));
-        } catch (error) {
-          console.log('Error in non-current video pause effect:', error);
-        }
+    } else {
+      setIsPlaying(false)
+      if (videoRef.current) {
+        videoRef.current.pauseAsync().catch(err => console.log('Error pausing video:', err))
       }
     }
-  }, [isCurrentVideo, index, fadeAnim, scaleAnim]);
-  
-  // Handle video tap - toggle pause state (make sure this works correctly)
+
+    return () => {
+      if (controlsTimeout.current) {
+        clearTimeout(controlsTimeout.current)
+      }
+    }
+  }, [isCurrentVideo])
+
+  const handlePlaybackStatusUpdate = (status) => {
+    if (status.isLoaded) {
+      setIsLoading(false)
+      if (status.didJustFinish) {
+        // Video finished playing
+        setIsPlaying(false)
+        setProgress(0)
+        if (videoRef.current) {
+          videoRef.current.replayAsync().catch(err => console.log('Error replaying video:', err))
+        }
+      } else {
+        // Update progress
+        const newProgress = status.positionMillis / status.durationMillis
+        setProgress(newProgress)
+      }
+    }
+  }
+
   const handleVideoPress = () => {
-    if (!isCurrentVideo || !playerRef.current) return;
+    setIsPlaying(!isPlaying)
     
-    console.log(`Video ${index} pressed, toggling pause state`);
-    setIsPaused(prev => {
-      const newPaused = !prev;
-      
-      if (newPaused) {
-        showPauseIcon();
-      }
-      
-      // Force video to play/pause immediately
-      try {
-        if (newPaused) {
-          console.log(`Pausing video ${index} on user tap`);
-          playerRef.current.pause()
-            .catch(err => console.log(`Error pausing video ${index}:`, err));
-        } else {
-          console.log(`Playing video ${index} on user tap`);
-          playerRef.current.play()
-            .catch(err => console.log(`Error playing video ${index}:`, err));
-        }
-      } catch (error) {
-        console.log('Error in handleVideoPress:', error);
-      }
-      
-      return newPaused;
-    });
-  };
-  
-  // Fixed mute button handler with direct player access
-  const handleMuteToggle = () => {
-    console.log(`Toggling mute from ${isMuted} to ${!isMuted}`);
-    
-    // Update global mute state
-    setIsMuted(!isMuted);
-    
-    // Also directly update the player for immediate effect
-      if (playerRef.current) {
-        try {
-        playerRef.current.muted = !isMuted;
-        console.log(`Player mute set to ${!isMuted} for video ${index}`);
-        } catch (error) {
-        console.log('Error toggling mute state:', error);
-      }
+    if (isPlaying) {
+      videoRef.current?.pauseAsync()
+    } else {
+      videoRef.current?.playAsync()
     }
-  };
-  
-  // Show pause icon animation with faster timing
-  const showPauseIcon = () => {
-    pauseIconAnim.setValue(1);
-    Animated.timing(pauseIconAnim, {
-      toValue: 0,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  };
-  
-  // Handle like animation with faster timing
-  const animateHeart = () => {
-    Animated.sequence([
-      Animated.timing(heartAnimation, {
-        toValue: 1.3,
-        duration: 50,
-        useNativeDriver: true,
-      }),
-      Animated.timing(heartAnimation, {
-        toValue: 1,
-        duration: 50,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-  
-  // Handle like button press
-  const handleLikePress = () => {
-    animateHeart();
-    handleLike(item.id);
-  };
-  
-  // Format date function...
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
     
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    showControlsTemporarily()
+  }
+
+  const showControlsTemporarily = () => {
+    setShowControls(true)
     
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
-  };
-  
-  const formattedDate = item?.createdAt ? formatDate(item.createdAt) : '';
-  
-  // Render the component with theme
+    if (controlsTimeout.current) {
+      clearTimeout(controlsTimeout.current)
+    }
+    
+    controlsTimeout.current = setTimeout(() => {
+      setShowControls(false)
+    }, 3000)
+  }
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return ''
+    
+    const date = new Date(timestamp.seconds * 1000)
+    const now = new Date()
+    const diffTime = Math.abs(now - date)
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+    return `${Math.floor(diffDays / 365)} years ago`
+  }
+
   return (
-    <Animated.View style={[
-      styles.videoContainer,
-      {
-        opacity: fadeAnim,
-        transform: [{ scale: scaleAnim }],
-        backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background,
-      }
-    ]}>
-      <StatusBar style={theme.background === '#FFFFFF' ? "dark" : "light"} />
-      
-      {/* Video Player with tap gesture */}
-      <TouchableWithoutFeedback onPress={handleVideoPress}>
-      <View style={styles.videoWrapper}>
-          {videoUrl ? (
-        <VideoView 
-          style={styles.video} 
-          player={player}
-              allowsFullscreen={false}
-          nativeControls={false}
-            resizeMode="cover" 
-        />
-          ) : (
-            <View style={[styles.video, {backgroundColor: theme.cardBackground, justifyContent: 'center', alignItems: 'center'}]}>
-              <Text style={{color: theme.text, fontFamily: theme.font}}>Video not available</Text>
-      </View>
-          )}
-          
-          {/* Large Pause Icon */}
-          <Animated.View 
-            style={[
-              styles.pauseIconContainer,
-              { opacity: pauseIconAnim }
-            ]}
-          >
-            <Ionicons name="pause" size={80} color='white' />
-          </Animated.View>
-        </View>
-      </TouchableWithoutFeedback>
-      
-      {/* Category Tag */}
-      {item?.category && item.category !== "All" && (
-        <View style={[styles.categoryTag, { backgroundColor: theme.accent + 'CC' }]}>
-          <Text style={[styles.categoryTagText, { fontFamily: theme.font }]}>{item.category}</Text>
-      </View>
-      )}
-      
-      {/* Action buttons */}
-      <View style={styles.actionButtonsBar}>
-        <TouchableOpacity 
-          style={styles.actionButtonColumn} 
-          onPress={handleLikePress}
-          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
-        >
-          <Animated.View style={{ transform: [{ scale: heartAnimation }] }}>
-            <AntDesign
-              name={isLiked ? "heart" : "hearto"}
-              size={28}
-              color={isLiked ? "red" : 'white'}
-            />
-          </Animated.View>
-          <Text style={[
-            styles.actionButtonText,
-            { fontFamily: theme.font },
-            isLiked && { color: 'red' }
-          ]}>{likeCount}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButtonColumn}
-          onPress={() => setShowComments(true)}
-          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
-        >
-          <Ionicons name="chatbubble-outline" size={26} color='white' />
-          <Text style={[styles.actionButtonText, { fontFamily: theme.font }]}>{item?.comments || 0}</Text>
-        </TouchableOpacity>
-        
-        
-        
-        <TouchableOpacity 
-          style={styles.actionButtonColumn}
-          onPress={() => handleSave(item.id)}
-          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
-        >
-          <MaterialIcons
-            name={isSaved ? "bookmark" : "bookmark-outline"}
-            size={28}
-            color={isSaved ? theme.accent : 'white'}
-          />
-          <Text style={[styles.actionButtonText, { fontFamily: theme.font }]}>Save</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {/* Video Info */}
-      <View style={styles.videoInfoArea}>
-        <View style={styles.authorRow}>
-          <Text style={[styles.authorName, { color: 'white', fontFamily: theme.titleFont }]}>@{item?.uploadedBy || 'UptoDate'}</Text>
-          {formattedDate && (
-            <>
-              <Text style={[styles.authorSeparator, { color: 'white' }]}>•</Text>
-              <Text style={[styles.videoDate, { color: 'white', fontFamily: theme.font }]}>{formattedDate}</Text>
-            </>
-          )}
-        </View>
-        
-        <Text style={[styles.videoTitle, { color: 'white', fontFamily: theme.titleFont }]} numberOfLines={2}>
-          {item?.title || "Latest News Update"}
-        </Text>
-        
-        {item?.description && (
-          <Text style={[styles.videoDescription, { color: 'white', fontFamily: theme.font }]} numberOfLines={2}>
-            {item.description}
-          </Text>
-        )}
-      </View>
-      
-      {/* Enhanced Mute Button with better tap area */}
-      <TouchableOpacity
-        style={[styles.muteButton, { backgroundColor: theme.cardBackground + '80' }]}
-        onPress={handleMuteToggle}
-        hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
+    <View style={styles.videoItemContainer}>
+      <TouchableOpacity 
+        activeOpacity={1}
+        onPress={handleVideoPress}
+        style={styles.videoWrapper}
       >
-          <Ionicons
-          name={isMuted ? "volume-mute" : "volume-high"}
-            size={24}
-          color='white'
-          />
-        </TouchableOpacity>
+        <Video
+          ref={videoRef}
+          source={{ uri: item.videoUrl }}
+          style={styles.video}
+          resizeMode="contain"
+          shouldPlay={isCurrentVideo}
+          isLooping={true}
+          isMuted={isMuted}
+          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+          onLoad={(status) => {
+            setDuration(status.durationMillis)
+            setIsLoading(false)
+          }}
+          onError={(error) => {
+            console.log('Video error:', error)
+            setIsLoading(false)
+          }}
+        />
         
+        {isLoading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="white" />
+          </View>
+        )}
+        
+        {/* Video info - simplified to just title */}
+        <View style={styles.videoInfo}>
+          <Text style={styles.videoTitle} numberOfLines={1}>
+            {item.title || 'Untitled Video'}
+          </Text>
+        </View>
+        
+        {/* Progress bar - moved to bottom */}
+        <View style={styles.progressBarContainer}>
+          <View 
+            style={[
+              styles.progressBarFill, 
+              { width: `${progress * 100}%`, backgroundColor: theme.accent }
+            ]} 
+          />
+        </View>
+        
+        {showControls && (
+          <View style={styles.controls}>
+            {isPlaying ? (
+              <Ionicons name="pause-circle" size={80} color="rgba(255,255,255,0.8)" />
+            ) : (
+              <Ionicons name="play-circle" size={80} color="rgba(255,255,255,0.8)" />
+            )}
+          </View>
+        )}
+        
+        {/* Category badge */}
+        {item.category && (
+          <View style={[styles.categoryBadge, { backgroundColor: theme.accent + 'AA' }]}>
+            <Text style={styles.categoryText}>{item.category}</Text>
+          </View>
+        )}
+        
+        {/* Action buttons - with added share button */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleLike(item.id)}
+          >
+            <Ionicons 
+              name={isLiked ? "heart" : "heart-outline"} 
+              size={26} 
+              color={isLiked ? "red" : "white"} 
+            />
+            <Text style={styles.actionText}>{likeCount}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setShowComments(true)}
+          >
+            <Ionicons name="chatbubble-outline" size={24} color="white" />
+            <Text style={styles.actionText}>{item.comments || 0}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleSave(item.id)}
+          >
+            <Ionicons 
+              name={isSaved ? "bookmark" : "bookmark-outline"} 
+              size={24} 
+              color={isSaved ? theme.accent : "white"} 
+            />
+            <Text style={styles.actionText}>Save</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              const shareOptions = {
+                message: `Check out this video: ${item.title}`,
+                url: item.videoUrl
+              };
+              try {
+                Alert.alert('Share', 'Sharing feature will be implemented soon!');
+              } catch (error) {
+                console.error('Error sharing video:', error);
+              }
+            }}
+          >
+            <Ionicons 
+              name="share-social-outline" 
+              size={24} 
+              color="white" 
+            />
+            <Text style={styles.actionText}>Share</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setIsMuted(!isMuted)}
+          >
+            <Ionicons 
+              name={isMuted ? "volume-mute" : "volume-high"} 
+              size={24} 
+              color="white" 
+            />
+            <Text style={styles.actionText}>
+              {isMuted ? "Unmute" : "Mute"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+      
       {/* Comments Modal */}
       <CommentsModal
         visible={showComments}
         onClose={() => setShowComments(false)}
-        videoId={item?.id}
-        commentsCount={item?.comments || 0}
+        videoId={item.id}
+        commentsCount={item.comments || 0}
         onCommentAdded={onCommentAdded}
       />
-    </Animated.View>
-  );
-});
+    </View>
+  )
+})
 
 // Category selector component
 const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
   const [modalVisible, setModalVisible] = useState(false)
-  const scaleAnim = useRef(new Animated.Value(0)).current
+  const scaleAnim = useRef(new RNAnimated.Value(0)).current
   const {theme} = useTheme()
 
   useEffect(() => {
     if (modalVisible) {
-      Animated.spring(scaleAnim, {
+      RNAnimated.spring(scaleAnim, {
         toValue: 1,
         friction: 7,
         tension: 40,
@@ -446,7 +312,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
       >
         <Text style={[styles.categoryButtonText, { color: theme.text, fontFamily: theme.font }]}>{selectedCategory}</Text>
         <Ionicons name="chevron-down" size={16} color={theme.text} />
-        </TouchableOpacity>
+      </TouchableOpacity>
         
       <Modal
         transparent
@@ -457,7 +323,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
         <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
           <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
             <TouchableWithoutFeedback>
-              <Animated.View 
+              <RNAnimated.View 
                 style={[
                   styles.categoriesContainer,
                   {
@@ -475,7 +341,7 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
                     style={styles.closeButton}
                   >
                     <Ionicons name="close" size={24} color={theme.text} />
-        </TouchableOpacity>
+                  </TouchableOpacity>
                 </View>
                 
                 <ScrollView 
@@ -508,657 +374,711 @@ const CategorySelector = ({ selectedCategory, onSelectCategory }) => {
                       {selectedCategory === category && (
                         <Ionicons name="checkmark" size={18} color={theme.accent} />
                       )}
-        </TouchableOpacity>
+                    </TouchableOpacity>
                   ))}
                 </ScrollView>
-              </Animated.View>
+              </RNAnimated.View>
             </TouchableWithoutFeedback>
-      </View>
+          </View>
         </TouchableWithoutFeedback>
       </Modal>
     </>
   )
 }
 
-// End of content screen
-const EndOfContentScreen = ({ onExploreArticles }) => {
-  const {theme} = useTheme()
-  
-  return (
-    <View style={[styles.endOfContentContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-      <Ionicons name="newspaper-outline" size={64} color={theme.accent} />
-      <Text style={[styles.endOfContentTitle, { color: theme.text, fontFamily: theme.titleFont }]}>You've Reached the End</Text>
-      <Text style={[styles.endOfContentText, { color: theme.textSecondary, fontFamily: theme.font }]}>
-        That's all the shorts available in this category.
-      </Text>
+const EndScreen = ({ onRetry, theme, navigation }) => (
+  <Animated.View 
+    entering={FadeIn}
+    style={[
+      styles.endScreenContainer, 
+      { backgroundColor: theme.cardBackground }
+    ]}
+  >
+    <Ionicons
+      name="videocam-outline"
+      size={80}
+      color={theme.accent}
+      style={{ marginBottom: 20 }}
+    />
+    <Text style={[
+      styles.endScreenTitle, 
+      { color: theme.text, fontFamily: theme.titleFont }
+    ]}>
+      No More Shorts
+    </Text>
+    <Text style={[
+      styles.endScreenText, 
+      { color: theme.textSecondary, fontFamily: theme.font }
+    ]}>
+      You've watched all available shorts in this category
+    </Text>
+    
+    <View style={styles.endScreenButtonContainer}>
       <TouchableOpacity
-        style={[styles.exploreArticlesButton, { backgroundColor: theme.accent }]}
-        onPress={()=>router.push('/(tabs)/Articles')}
+        style={[styles.endScreenButton, { backgroundColor: theme.accent }]}
+        onPress={onRetry}
       >
-        <Text style={[styles.exploreArticlesButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>
+        <Ionicons name="refresh-outline" size={24} color="white" style={styles.buttonIcon} />
+        <Text style={[styles.endScreenButtonText, { color: 'white', fontFamily: theme.font }]}>
+          Watch Again
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={[styles.endScreenButton, { backgroundColor: theme.cardBackground, borderWidth: 1, borderColor: theme.accent }]}
+        onPress={() => navigation.navigate('Articles')}
+      >
+        <Ionicons name="newspaper-outline" size={24} color={theme.accent} style={styles.buttonIcon} />
+        <Text style={[styles.endScreenButtonText, { color: theme.accent, fontFamily: theme.font }]}>
           Explore Articles
         </Text>
       </TouchableOpacity>
     </View>
-  )
-}
+  </Animated.View>
+);
 
+// Main Component
 const HomeScreen = () => {
+  const { theme } = useTheme()
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [lastDoc, setLastDoc] = useState(null)
+  const [hasMoreVideos, setHasMoreVideos] = useState(true)
+  const [error, setError] = useState(null)
+  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [likedVideos, setLikedVideos] = useState({})
-  const [likeCounts, setLikeCounts] = useState({})
   const [savedVideos, setSavedVideos] = useState({})
-  const [togglePlayPause, setTogglePlayPause] = useState(false)
-  const [commentCounts, setCommentCounts] = useState({})
-  const [selectedCategory, setSelectedCategory] = useState("Regional")
-  const [lastVisible, setLastVisible] = useState(null)
-  const [hasMoreVideos, setHasMoreVideos] = useState(true)
-  const [userCity, setUserCity] = useState(null)
-  const [isUserCityLoaded, setIsUserCityLoaded] = useState(false)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const [isCityLoading, setIsCityLoading] = useState(true)
-  const [isVideosLoading, setIsVideosLoading] = useState(false)
-  const {theme} = useTheme()
-  // References
-  const scrollTimeoutRef = useRef(null);
-  const flatListRef = useRef(null);
-  const viewabilityConfigRef = useRef({
-    itemVisiblePercentThreshold: 50,
-    minimumViewTime: 500,
-    waitForInteraction: true
-  });
-  const pagerRef = useRef(null);
+  const [likeCounts, setLikeCounts] = useState({})
+  
+  const flatListRef = useRef(null)
+  
+  const categories = [
+    'All', 
+    'Politics', 
+    'Technology', 
+    'Health', 
+    'Business', 
+    'Entertainment', 
+    'Sports',
+    'Science',
+    'Education',
+    'World',
+    'Environment',
+    'Finance'
+  ]
 
-  // Load user's city on mount
+  // Load liked and saved videos
   useEffect(() => {
-    const loadUserCity = async () => {
-      setIsCityLoading(true);
-      const user = auth.currentUser;
+    const loadUserInteractions = async () => {
+      const user = auth.currentUser
       if (user) {
         try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            const city = userDoc.data().city;
-            setUserCity(city);
-            setIsUserCityLoaded(true);
-            // Only load videos if we're in Regional category
-            if (selectedCategory === "Regional") {
-              loadVideos(true);
-            }
-          } else {
-            setIsUserCityLoaded(true);
-            if (selectedCategory === "Regional") {
-              setError("Please set your city in profile to view regional content");
-            }
-          }
-      } catch (error) {
-          console.error('Error loading user city:', error);
-          setIsUserCityLoaded(true);
-          if (selectedCategory === "Regional") {
-            setError("Failed to load user profile. Please try again.");
-          }
-        }
-      } else {
-        setIsUserCityLoaded(true);
-        if (selectedCategory === "Regional") {
-          setError("Please login to view regional content");
+          // Load liked videos
+          const likedRef = collection(db, 'users', user.uid, 'likedShorts')
+          const likedSnapshot = await getDocs(likedRef)
+          const likedMap = {}
+          
+          likedSnapshot.docs.forEach(doc => {
+            const data = doc.data()
+            likedMap[data.shortId] = true
+          })
+          
+          setLikedVideos(likedMap)
+          
+          // Load saved videos
+          const savedRef = collection(db, 'users', user.uid, 'savedShorts')
+          const savedSnapshot = await getDocs(savedRef)
+          const savedMap = {}
+          
+          savedSnapshot.docs.forEach(doc => {
+            const data = doc.data()
+            savedMap[data.shortId] = true
+          })
+          
+          setSavedVideos(savedMap)
+        } catch (error) {
+          console.error('Error loading user interactions:', error)
         }
       }
-      setIsCityLoading(false);
-    };
-    loadUserCity();
-  }, []);
-  
-  // Effect to load videos when category changes
-  useEffect(() => {
-    if (selectedCategory === "Regional" && !isUserCityLoaded) {
-      return; // Don't load videos if we haven't loaded the user's city yet
     }
-    loadVideos(true);
-  }, [selectedCategory, isUserCityLoaded]);
-  
-  // Effect to initialize like counts
-  useEffect(() => {
-    if (videos.length > 0) {
-      const initialLikeCounts = {}
-      videos.forEach(video => {
-        initialLikeCounts[video.id] = video.likes || 0
-      })
-      setLikeCounts(initialLikeCounts)
-    }
-  }, [videos])
-
-  // Load saved videos on mount
-  useEffect(() => {
-    const user = auth.currentUser
-    if (user) {
-      loadSavedVideos(user.uid)
-    }
+    
+    loadUserInteractions()
   }, [])
-  
-  // Load user's saved videos
-  const loadSavedVideos = async (userId) => {
-    try {
-      const savedShortsRef = collection(db, 'users', userId, 'savedShorts')
-      const querySnapshot = await getDocs(savedShortsRef)
-      
-      if (!querySnapshot.empty) {
-        const savedVideosMap = {}
-        querySnapshot.docs.forEach(doc => {
-          const data = doc.data()
-          savedVideosMap[data.shortId] = true
-        })
-        setSavedVideos(savedVideosMap)
-      }
-    } catch (error) {
-      console.error('Error loading saved videos:', error)
+
+  // Fetch initial videos
+  useEffect(() => {
+    fetchVideos(true)
+  }, [])
+
+  // Re-fetch videos when category changes
+  useEffect(() => {
+    if (selectedCategory !== 'All') {
+      fetchVideosByCategory(true)
+    } else {
+      fetchVideos(true)
     }
-  }
-  
-  // Load videos from Firebase
-  const loadVideos = async (reset = false) => {
-    if (!reset && !hasMoreVideos) return;
+  }, [selectedCategory])
+
+  // Fetch all videos
+  const fetchVideos = async (reset = false) => {
+    if (loading && !reset) return
     
     try {
-      setIsVideosLoading(true);
       if (reset) {
-        setLastVisible(null);
-        setVideos([]); // Clear videos when resetting
+        setLoading(true)
+        setVideos([])
+        setLastDoc(null)
+        setHasMoreVideos(true)
+        setCurrentIndex(0)
       } else {
-        setLoadingMore(true);
+        setLoadingMore(true)
       }
+
+      let q
       
-      console.log(`Fetching ${reset ? 'initial' : 'more'} videos for category: ${selectedCategory}`);
-      
-      // Base query
-      const shortsRef = collection(db, 'shorts');
-      
-      // Build query based on category
-      let q;
-      
-      if (selectedCategory === "Regional") {
-        if (!userCity) {
-          setError("Please set your city in profile to view regional content");
-          setVideos([]);
-          setHasMoreVideos(false);
-          return;
-        }
-        
-        // Filter by user's city
+      if (reset || !lastDoc) {
         q = query(
-          shortsRef, 
-          where('location', '==', userCity),
-          orderBy('createdAt', 'desc'), 
+          collection(db, 'shorts'),
+          orderBy('createdAt', 'desc'),
           limit(VIDEOS_PER_BATCH)
-        );
-      } else if (selectedCategory === "All") {
-        // No category filter
-        q = query(
-          shortsRef, 
-          orderBy('createdAt', 'desc'), 
-          limit(VIDEOS_PER_BATCH)
-        );
+        )
       } else {
-        // With category filter
         q = query(
-          shortsRef, 
-          where('category', '==', selectedCategory),
-          orderBy('createdAt', 'desc'), 
+          collection(db, 'shorts'),
+          orderBy('createdAt', 'desc'),
+          startAfter(lastDoc),
           limit(VIDEOS_PER_BATCH)
-        );
+        )
       }
-      
-      // Add pagination if not resetting
-      if (!reset && lastVisible) {
-        q = query(q, startAfter(lastVisible));
-      }
-      
-      const querySnapshot = await getDocs(q);
+
+      const querySnapshot = await getDocs(q)
       
       if (querySnapshot.empty) {
-        if (reset) {
-          setError(selectedCategory === "Regional" && !userCity 
-            ? "Please set your city in profile to view regional content" 
-            : `No videos found in the ${selectedCategory} category.`);
-          setVideos([]);
-        }
-        setHasMoreVideos(false);
-        return;
+        setHasMoreVideos(false)
+        setLoading(false)
+        setLoadingMore(false)
+        return
       }
       
-      // Get last document for pagination
-      const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
-      setLastVisible(lastDoc);
-      
-      // Parse videos data
-      const shortsData = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
+      const videosData = []
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        videosData.push({
           id: doc.id,
-          videoUrl: data.videoUrl,
-          title: data.title || 'Untitled Video',
-          description: data.description || '',
-          uploadedBy: data.uploadedBy || 'UptoDate',
-          category: data.category || 'Uncategorized',
-          tags: data.tags || [],
-          likes: data.likes || 0,
-          comments: data.comments || 0,
-          createdAt: data.createdAt?.toDate() || new Date()
-        };
-      });
+          ...data
+        })
+        
+        // Initialize like counts
+        setLikeCounts(prev => ({
+          ...prev,
+          [doc.id]: data.likes || 0
+        }))
+      })
+
+      setLastDoc(querySnapshot.docs[querySnapshot.docs.length - 1])
       
-      console.log(`Loaded ${shortsData.length} videos`);
-      
-      // Update videos state
       if (reset) {
-        setVideos(shortsData);
+        setVideos(videosData)
       } else {
-        setVideos(prev => [...prev, ...shortsData]);
+        setVideos(prev => [...prev, ...videosData])
       }
       
-      // Check if we have more videos to load
-      setHasMoreVideos(shortsData.length >= VIDEOS_PER_BATCH);
-      setError(null);
-    } catch (err) {
-      console.error('Error loading videos:', err);
-      setError('Failed to load videos: ' + err.message);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      setIsVideosLoading(false);
-    }
-  };
-  
-  // Load more videos when reaching the end
-  const handleLoadMore = () => {
-    if (!loadingMore && hasMoreVideos && videos.length > 0) {
-      loadVideos(false)
+      setHasMoreVideos(videosData.length === VIDEOS_PER_BATCH)
+      setLoading(false)
+      setLoadingMore(false)
+      setError(null)
+    } catch (error) {
+      console.error("Error fetching videos: ", error)
+      setError("Couldn't load videos. Please check your connection.")
+      setLoading(false)
+      setLoadingMore(false)
     }
   }
-  
-  // Handle category selection
-  const handleCategoryChange = (category) => {
-    console.log('Category changed to:', category);
-    setSelectedCategory(category);
-    setCurrentIndex(0);
-    setLastVisible(null);
-    setHasMoreVideos(true);
-    setError(null);
-    setLoading(true); // Set loading state immediately
-    
-    // Reset videos and load new ones
-    setVideos([]);
-    loadVideos(true);
-  };
-  
-  // Handle scroll event
-  const handleScroll = (event) => {
-    if (!event || !event.nativeEvent) return;
+
+  // Fetch videos by category
+  const fetchVideosByCategory = async (reset = false) => {
+    if (loading && !reset) return
     
     try {
-      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-      
-      // Calculate current index with rounding to ensure single item changes
-      const scrollPosition = contentOffset.y;
-      const currentIdx = Math.round(scrollPosition / height);
-      
-      // Only update if the index is valid and different from current
-      if (currentIdx !== currentIndex && currentIdx >= 0 && currentIdx < videos.length) {
-        // Add debounce to prevent rapid changes
-        if (scrollTimeoutRef.current) {
-          clearTimeout(scrollTimeoutRef.current);
-        }
-        
-        scrollTimeoutRef.current = setTimeout(() => {
-          setCurrentIndex(currentIdx);
-        }, 100); // Small delay to ensure smooth transitions
+      if (reset) {
+        setLoading(true)
+        setVideos([])
+        setLastDoc(null)
+        setHasMoreVideos(true)
+        setCurrentIndex(0)
+      } else {
+        setLoadingMore(true)
       }
       
-      // Check if close to bottom to load more
-      if (contentSize && contentSize.height && layoutMeasurement && layoutMeasurement.height) {
-        const scrollOffset = contentOffset.y;
-        const isCloseToBottom = contentSize.height - (scrollOffset + layoutMeasurement.height) < height * 0.5;
-        
-        if (isCloseToBottom && !loadingMore && hasMoreVideos) {
-          handleLoadMore();
-        }
+      let q
+      
+      if (reset || !lastDoc) {
+        q = query(
+          collection(db, 'shorts'),
+          where('category', '==', selectedCategory),
+          orderBy('createdAt', 'desc'),
+          limit(VIDEOS_PER_BATCH)
+        )
+      } else {
+        q = query(
+          collection(db, 'shorts'),
+          where('category', '==', selectedCategory),
+          orderBy('createdAt', 'desc'),
+          startAfter(lastDoc),
+          limit(VIDEOS_PER_BATCH)
+        )
       }
+      
+      const querySnapshot = await getDocs(q)
+      
+      if (querySnapshot.empty) {
+        setHasMoreVideos(false)
+        setLoading(false)
+        setLoadingMore(false)
+        return
+      }
+      
+      const videosData = []
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        videosData.push({
+          id: doc.id,
+          ...data
+        })
+        
+        // Initialize like counts
+        setLikeCounts(prev => ({
+          ...prev,
+          [doc.id]: data.likes || 0
+        }))
+      })
+      
+      setLastDoc(querySnapshot.docs[querySnapshot.docs.length - 1])
+      
+      if (reset) {
+        setVideos(videosData)
+      } else {
+        setVideos(prev => [...prev, ...videosData])
+      }
+      
+      setHasMoreVideos(videosData.length === VIDEOS_PER_BATCH)
+      setLoading(false)
+      setLoadingMore(false)
     } catch (error) {
-      console.log('Error handling scroll:', error);
+      console.error(`Error fetching videos for category ${selectedCategory}:`, error)
+      setError("Couldn't load videos. Please check your connection.")
+      setLoading(false)
+      setLoadingMore(false)
     }
-  };
-  
-  // Handle like function
+  }
+
+  // Handle refresh
+  const handleRefresh = () => {
+    setRefreshing(true)
+    if (selectedCategory === 'All') {
+      fetchVideos(true).then(() => setRefreshing(false))
+    } else {
+      fetchVideosByCategory(true).then(() => setRefreshing(false))
+    }
+  }
+
+  // Handle like video
   const handleLike = async (videoId) => {
     const user = auth.currentUser
     if (!user) {
-      Alert.alert('Login Required', 'Please login to like shorts');
-      return;
+      Alert.alert('Login Required', 'Please login to like videos')
+      return
     }
 
     try {
-      const isCurrentlyLiked = likedVideos[videoId] || false;
-      const newLikeState = !isCurrentlyLiked;
+      const isCurrentlyLiked = likedVideos[videoId] || false
+      const newLikeState = !isCurrentlyLiked
       
-      // Update local state
-    setLikedVideos(prev => ({
-      ...prev,
+      // Optimistic update
+      setLikedVideos(prev => ({
+        ...prev,
         [videoId]: newLikeState
-      }));
-    
-    setLikeCounts(prev => ({
-      ...prev,
-        [videoId]: (prev[videoId] || 0) + (isCurrentlyLiked ? -1 : 1)
-      }));
+      }))
       
-      // Update Firebase
-      const videoRef = doc(db, 'shorts', videoId);
+      setLikeCounts(prev => ({
+        ...prev,
+        [videoId]: (prev[videoId] || 0) + (newLikeState ? 1 : -1)
+      }))
+      
+      // Update in Firestore
+      const videoRef = doc(db, 'shorts', videoId)
       await updateDoc(videoRef, {
         likes: increment(newLikeState ? 1 : -1)
-      });
-
-      // Show feedback
+      })
       
+      // Update user's liked videos collection
+      const userLikedRef = collection(db, 'users', user.uid, 'likedShorts')
+      
+      if (newLikeState) {
+        await addDoc(userLikedRef, {
+          shortId: videoId,
+          likedAt: serverTimestamp()
+        })
+      } else {
+        const q = query(userLikedRef, where('shortId', '==', videoId))
+        const querySnapshot = await getDocs(q)
+        
+        if (!querySnapshot.empty) {
+          await deleteDoc(querySnapshot.docs[0].ref)
+        }
+      }
     } catch (error) {
-      console.error('Error updating like:', error);
-      // Revert local state
+      console.error('Error liking video:', error)
+      
+      // Revert optimistic update
       setLikedVideos(prev => ({
         ...prev,
         [videoId]: !prev[videoId]
-      }));
+      }))
+      
       setLikeCounts(prev => ({
         ...prev,
-        [videoId]: (prev[videoId] || 0) + (prev[videoId] > 0 ? -1 : 1)
-      }));
-      Alert.alert('Error', 'Failed to update like. Please try again.');
+        [videoId]: (prev[videoId] || 0) + (prev[videoId] ? -1 : 1)
+      }))
+      
+      Alert.alert('Error', 'Failed to like video. Please try again.')
     }
-  };
-  
-  // Handle save function
+  }
+
+  // Handle save video
   const handleSave = async (videoId) => {
     const user = auth.currentUser
     if (!user) {
-      Alert.alert('Login Required', 'Please login to save shorts');
-      return;
+      Alert.alert('Login Required', 'Please login to save videos')
+      return
     }
 
     try {
-      const isCurrentlySaved = savedVideos[videoId] || false;
-      const newSaveState = !isCurrentlySaved;
-
-      // Update local state
+      const isCurrentlySaved = savedVideos[videoId] || false
+      const newSaveState = !isCurrentlySaved
+      
+      // Optimistic update
       setSavedVideos(prev => ({
         ...prev,
         [videoId]: newSaveState
-      }));
-
+      }))
+      
+      // Update in Firestore
+      const userSavedRef = collection(db, 'users', user.uid, 'savedShorts')
+      
       if (newSaveState) {
-        // Save to Firebase
-        const savedShortsRef = collection(db, 'users', user.uid, 'savedShorts');
-        await addDoc(savedShortsRef, {
+        await addDoc(userSavedRef, {
           shortId: videoId,
           savedAt: serverTimestamp()
-        });
+        })
       } else {
-        // Remove from Firebase
-        const savedShortsRef = collection(db, 'users', user.uid, 'savedShorts');
-        const q = query(savedShortsRef, where('shortId', '==', videoId));
-        const querySnapshot = await getDocs(q);
+        const q = query(userSavedRef, where('shortId', '==', videoId))
+        const querySnapshot = await getDocs(q)
+        
         if (!querySnapshot.empty) {
-          await deleteDoc(doc(db, 'users', user.uid, 'savedShorts', querySnapshot.docs[0].id));
+          await deleteDoc(querySnapshot.docs[0].ref)
         }
       }
-
-      // Show feedback
-      Alert.alert(
-        newSaveState ? 'Saved' : 'Unsaved',
-        newSaveState ? 'Short has been saved to your collection' : 'Short has been removed from your collection'
-      );
     } catch (error) {
-      console.error('Error saving/unsaving short:', error);
-      Alert.alert('Error', 'Failed to save short. Please try again.');
-      // Revert local state
+      console.error('Error saving video:', error)
+      
+      // Revert optimistic update
       setSavedVideos(prev => ({
-      ...prev,
-      [videoId]: !prev[videoId]
-      }));
+        ...prev,
+        [videoId]: !prev[videoId]
+      }))
+      
+      Alert.alert('Error', 'Failed to save video. Please try again.')
     }
-  };
-    
+  }
+
   // Handle comment added
   const handleCommentAdded = (videoId) => {
-    setCommentCounts(prev => ({
-      ...prev,
-      [videoId]: (prev[videoId] || 0) + 1
-    }));
-  };
-  
-  // Navigate to articles
-  const navigateToArticles = () => {
-    Alert.alert('Navigate', 'Navigating to Articles tab');
-  };
-  
-  // Toggle play/pause
-  const handleTogglePlayPause = () => {
-    setTogglePlayPause(prev => !prev);
-  };
-  
-  // Handle page change
-  const handlePageChange = (event) => {
-    const newIndex = event.nativeEvent.position;
-    if (newIndex !== currentIndex) {
-      setCurrentIndex(newIndex);
-    }
-  };
-  
-  // Render video item
-  const renderVideo = useCallback(({ item, index }) => {
-    if (!item || !item.id) return null;
-    
-    const isCurrentVideo = index === currentIndex;
-    const isLiked = likedVideos[item.id] || false;
-    const likeCount = likeCounts[item.id] || 0;
-    const isSaved = savedVideos[item.id] || false;
-    const commentCount = commentCounts[item.id] || item.comments || 0;
-    
-    return (
-      <VideoItem
-        key={item.id}
-        item={{...item, comments: commentCount}}
-        index={index}
-        isCurrentVideo={isCurrentVideo}
-        isMuted={isMuted}
-        setIsMuted={setIsMuted}
-        isLiked={isLiked}
-        likeCount={likeCount}
-        handleLike={handleLike}
-        handleSave={handleSave}
-        isSaved={isSaved}
-        onCommentAdded={handleCommentAdded}
-        togglePlayPause={togglePlayPause}
-      />
-    );
-  }, [currentIndex, isMuted, likedVideos, likeCounts, savedVideos, commentCounts, togglePlayPause]);
-  
-  // Handle viewable items changed
-  const onViewableItemsChanged = useCallback(({ viewableItems }) => {
-    if (!viewableItems || !viewableItems.length) return;
-    
-    const visibleItem = viewableItems[0];
-    if (visibleItem && typeof visibleItem.index === 'number') {
-      console.log(`Item at index ${visibleItem.index} is now viewable`);
-      
-      // If different from current, update with animation
-      if (visibleItem.index !== currentIndex) {
-        // Update current index
-        setCurrentIndex(visibleItem.index);
-        
-        // Add subtle haptic feedback for better UX (if available in your setup)
-        // ReactNativeHapticFeedback.trigger('impactLight');
+    const videoIndex = videos.findIndex(v => v.id === videoId)
+    if (videoIndex !== -1) {
+      const updatedVideos = [...videos]
+      updatedVideos[videoIndex] = {
+        ...updatedVideos[videoIndex],
+        comments: (updatedVideos[videoIndex].comments || 0) + 1
       }
+      setVideos(updatedVideos)
     }
-  }, [currentIndex]);
-  
-  // Force first video to play when app loads or refocuses
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Screen focused, handling video state');
-      
-      return () => {
-        console.log('Screen unfocused, pausing current video');
-        // Pause the current video when leaving the tab
-        if (videos[currentIndex]?.playerRef) {
-          try {
-            videos[currentIndex].playerRef.pause();
-            // Set isPaused to true for the current video
-            setTogglePlayPause(true);
-          } catch (error) {
-            console.log(`Error pausing current video:`, error);
-          }
-        }
-      };
-    }, [videos, currentIndex])
-  );
-  // Render loading state with theme
-  if (isCityLoading || (selectedCategory === "Regional" && !userCity)) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-        <StatusBar style={theme.background === 'white' ? "dark" : "light"} />
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: 'white', fontFamily: theme.titleFont }]}>UptoDate News</Text>
-          <CategorySelector 
-            selectedCategory={selectedCategory}
-            onSelectCategory={handleCategoryChange}
-          />
-      </View>
-        <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-          <ActivityIndicator size="large" color={theme.accent} />
-          <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading News...</Text>
-        </View>
-      </SafeAreaView>
-    );
   }
 
-  // Render error or empty state with theme
-  if ((error || !videos.length) && !isCityLoading && selectedCategory !== "Regional") {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-        <StatusBar style={theme.background === '#FFFFFF' ? "dark" : "light"} />
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: 'white', fontFamily: theme.titleFont }]}>UptoDate News</Text>
-          <CategorySelector 
-            selectedCategory={selectedCategory}
-            onSelectCategory={handleCategoryChange}
-          />
-        </View>
-        <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-          <Ionicons name="cloud-offline" size={64} color={theme.accent} />
-          <Text style={[styles.errorTitle, { color: theme.text, fontFamily: theme.titleFont }]}>{!videos.length ? "No Videos Found" : "Error"}</Text>
-          <Text style={[styles.errorText, { color: theme.textSecondary, fontFamily: theme.font }]}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.accent }]} onPress={() => loadVideos(true)}>
-            <Text style={[styles.retryButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
-      </SafeAreaView>
-    );
+  // Handle category selection
+  const handleCategorySelect = (category) => {
+    setSelectedCategory(category)
+    setShowCategoryModal(false)
   }
 
-  // Main render with theme
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-      <StatusBar style={theme.background === 'white' ? "dark" : "light"} />
-      
-      {/* Header with category selector */}
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: 'white', fontFamily: theme.titleFont }]}>UptoDate News</Text>
-        <CategorySelector 
-          selectedCategory={selectedCategory}
-          onSelectCategory={handleCategoryChange}
-        />
+  // Handle view changes
+  const handleViewableItemsChanged = useCallback(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      const visible = viewableItems[0]
+      setCurrentIndex(visible.index)
+    }
+  }, [])
+
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 300,
+  }
+
+  // Render loading state
+  if (loading && !videos.length) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <StatusBar style={theme.dark ? 'light' : 'dark'} />
+        <ActivityIndicator size="large" color={theme.accent} />
+        <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>
+          Loading Latest News...
+        </Text>
       </View>
-      
-      {/* Main content */}
-      {loading ? (
-        // Show loading state while fetching initial videos
-        <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-          <ActivityIndicator size="large" color={theme.accent} />
-          <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading News...</Text>
+    )
+  }
+
+  // Render empty state
+  if (!loading && videos.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <StatusBar style={theme.dark ? 'light' : 'dark'} />
+        
+        <View style={styles.headerContainer}>
+          <View style={styles.headerRow}>
+            <Text style={[styles.headerTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+              News Rapidly
+            </Text>
+            
+            <TouchableOpacity 
+              style={[styles.categoryDropdown, { backgroundColor: theme.accent + '20' }]}
+              onPress={() => setShowCategoryModal(true)}
+            >
+              <Text style={[styles.selectedCategoryText, { color: theme.text, fontFamily: theme.font }]}>
+                {selectedCategory}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
         </View>
-      ) : videos.length > 0 ? (
-        <>
-          <PagerView
-            ref={pagerRef}
-            style={styles.pagerView}
-            initialPage={0}
-            orientation="vertical"
-            onPageSelected={handlePageChange}
-            overdrag={false}
-            overScrollMode="never"
-            pageMargin={0}
-            transitionStyle="scroll"
+        
+        <View style={styles.emptyContainer}>
+          <Ionicons name="videocam-outline" size={64} color={theme.accent} />
+          <Text style={[styles.emptyTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+            No Videos Available
+          </Text>
+          <Text style={[styles.emptyMessage, { color: theme.textSecondary, fontFamily: theme.font }]}>
+            {selectedCategory !== 'All' 
+              ? `No videos found in the ${selectedCategory} category.`
+              : 'No videos have been uploaded yet.'}
+          </Text>
+          {selectedCategory !== 'All' && (
+            <TouchableOpacity 
+              style={[styles.viewAllButton, { backgroundColor: theme.accent }]}
+              onPress={() => setSelectedCategory('All')}
+            >
+              <Text style={[styles.viewAllButtonText, { color: 'white', fontFamily: theme.font }]}>
+                View All Videos
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <Modal
+          visible={showCategoryModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowCategoryModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowCategoryModal(false)}
           >
-            {videos.map((item, index) => (
-              <View key={item.id} style={styles.pageContainer}>
-                <VideoItem
-                  item={{...item, comments: commentCounts[item.id] || item.comments || 0}}
-                  index={index}
-                  isCurrentVideo={index === currentIndex}
-                  isMuted={isMuted}
-                  setIsMuted={setIsMuted}
-                  isLiked={likedVideos[item.id] || false}
-                  likeCount={likeCounts[item.id] || 0}
-                  handleLike={handleLike}
-                  handleSave={handleSave}
-                  isSaved={savedVideos[item.id] || false}
-                  onCommentAdded={handleCommentAdded}
-                  togglePlayPause={togglePlayPause}
-                />
-              </View>
-            ))}
-          </PagerView>
+            <View 
+              style={[
+                styles.categoryModalContent, 
+                { 
+                  backgroundColor: theme.cardBackground,
+                  top: Platform.OS === 'ios' ? 130 : 150,
+                  right: 20,
+                  maxHeight: height * 0.6,
+                }
+              ]}
+            >
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category}
+                    style={[
+                      styles.categoryOption,
+                      selectedCategory === category && { backgroundColor: theme.accent + '20' }
+                    ]}
+                    onPress={() => handleCategorySelect(category)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryOptionText,
+                        { 
+                          fontFamily: theme.font,
+                          color: selectedCategory === category ? theme.accent : theme.text
+                        }
+                      ]}
+                    >
+                      {category}
+                    </Text>
+                    {selectedCategory === category && (
+                      <Ionicons name="checkmark" size={18} color={theme.accent} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </SafeAreaView>
+    )
+  }
 
-          {/* Loading more indicator */}
-          {loadingMore && (
-            <View style={[styles.loadingMoreContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-              <ActivityIndicator color={theme.accent} />
-              <Text style={[styles.loadingMoreText, { color: theme.text, fontFamily: theme.font }]}>Loading more...</Text>
-            </View>
-          )}
+  // Render main content
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style={theme.dark ? 'light' : 'dark'} />
+      
+      <View style={styles.headerContainer}>
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+          News Rapidly
+          </Text>
           
-          {/* End of content screen */}
-          {!hasMoreVideos && currentIndex === videos.length - 1 && (
-            <View style={[styles.endOfContentContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-              <EndOfContentScreen onExploreArticles={navigateToArticles} />
-            </View>
-          )}
-        </>
-      ) : (
-        // Show error or empty state
-        <View style={[styles.centeredContainer, { backgroundColor: theme.background === '#FFFFFF' ? '#000' : theme.background }]}>
-          {error ? (
-            <>
-              <Ionicons name="cloud-offline" size={64} color={theme.accent} />
-              <Text style={[styles.errorTitle, { color: theme.text, fontFamily: theme.titleFont }]}>Error</Text>
-              <Text style={[styles.errorText, { color: theme.textSecondary, fontFamily: theme.font }]}>{error}</Text>
-              <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.accent }]} onPress={() => loadVideos(true)}>
-                <Text style={[styles.retryButtonText, { color: theme.background, fontFamily: theme.titleFont }]}>Try Again</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <ActivityIndicator size="large" color={theme.accent} />
-              <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>Loading News...</Text>
-            </>
-          )}
+          <TouchableOpacity 
+            style={[styles.categoryDropdown, { backgroundColor: theme.accent + '20' }]}
+            onPress={() => setShowCategoryModal(true)}
+          >
+            <Text style={[styles.selectedCategoryText, { color: theme.text, fontFamily: theme.font }]}>
+              {selectedCategory}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={24} color={theme.text} />
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
+      
+      <FlatList
+        ref={flatListRef}
+        data={videos}
+        keyExtractor={(item, index) => `video-${item.id}-${index}`}
+        renderItem={({ item, index }) => (
+          <VideoItem
+            item={item}
+            index={index}
+            isCurrentVideo={index === currentIndex}
+            isMuted={isMuted}
+            setIsMuted={setIsMuted}
+            isLiked={likedVideos[item.id] || false}
+            likeCount={likeCounts[item.id] || 0}
+            handleLike={handleLike}
+            handleSave={handleSave}
+            isSaved={savedVideos[item.id] || false}
+            onCommentAdded={handleCommentAdded}
+          />
+        )}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        snapToInterval={height}
+        decelerationRate={Platform.OS === 'ios' ? 'fast' : 0.8}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.round(event.nativeEvent.contentOffset.y / height);
+          if (index !== currentIndex) {
+            setCurrentIndex(index);
+          }
+        }}
+        snapToAlignment="start"
+        disableIntervalMomentum={true}
+        onViewableItemsChanged={handleViewableItemsChanged}
+        viewabilityConfig={{
+          itemVisiblePercentThreshold: 80,
+          minimumViewTime: 300,
+        }}
+        onEndReached={() => {
+          if (hasMoreVideos && !loadingMore) {
+            if (selectedCategory === 'All') {
+              fetchVideos(false)
+            } else {
+              fetchVideosByCategory(false)
+            }
+          }
+        }}
+        onEndReachedThreshold={0.5}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        ListFooterComponent={loadingMore && (
+          <View style={styles.loadingMoreContainer}>
+            <ActivityIndicator size="small" color={theme.accent} />
+            <Text style={[styles.loadingMoreText, { color: theme.textSecondary, fontFamily: theme.font }]}>
+              Loading more videos...
+            </Text>
+          </View>
+        )}
+      />
+      
+      <Modal
+        visible={showCategoryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCategoryModal(false)}
+        >
+          <View 
+            style={[
+              styles.categoryModalContent, 
+              { 
+                backgroundColor: theme.cardBackground,
+                top: Platform.OS === 'ios' ? 130 : 150,
+                right: 20,
+                maxHeight: height * 0.6,
+              }
+            ]}
+          >
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  style={[
+                    styles.categoryOption,
+                    selectedCategory === category && { backgroundColor: theme.accent + '20' }
+                  ]}
+                  onPress={() => handleCategorySelect(category)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      { 
+                        fontFamily: theme.font,
+                        color: selectedCategory === category ? theme.accent : theme.text
+                      }
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                  {selectedCategory === category && (
+                    <Ionicons name="checkmark" size={18} color={theme.accent} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
-  );
+  )
 }
 
 export default HomeScreen
@@ -1166,298 +1086,201 @@ export default HomeScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
   },
-  centeredContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  header: {
+  headerContainer: {
     position: 'absolute',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 44,
-    zIndex: 100,
-    top: 45,
+    top: Platform.OS === 'ios' ? 50 : 50,
     left: 0,
     right: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+    zIndex: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 5,
   },
   headerTitle: {
-    color: 'white',
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
-  videoContainer: {
+  categoryDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  selectedCategoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  videoItemContainer: {
+    top: 20,
     width,
     height,
     backgroundColor: '#000',
   },
   videoWrapper: {
     flex: 1,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
   },
   video: {
-    position: 'absolute',
+    flex: 1,
     width: '100%',
     height: '100%',
   },
-  
-  // YouTube Shorts style action buttons
-  actionButtonsBar: {
-    zIndex: 100,
-    position: 'absolute',
-    right: 10,
-    bottom: 100,
-    alignItems: 'center',
-    width: 55, // Ensure enough width for the buttons
-  },
-  actionButtonColumn: {
-    alignItems: 'center',
-    marginBottom: 24,
-    padding: 5, // Add some padding for easier tapping
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 12,
-    marginTop: 3,
-    fontWeight: '600',
-  },
-  
-  // Video info area (at bottom)
-  videoInfoArea: {
-    position: 'absolute',
-    left: 15,
-    right: 70, // Leave space for action buttons
-    bottom: 30,
-    zIndex: 90, // Ensure it's below the mute button
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  authorName: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  videoTitle: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  videoDescription: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    marginBottom: 10,
-  },
-  
-  // Enhanced mute button
-  muteButton: {
-    position: 'absolute',
-    right: 15,
-    bottom: 75,
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
-    borderRadius: 24,
-    zIndex: 95, // Ensure it's above the video info area
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  pauseIconContainer: {
+  progressBarContainer: {
     position: 'absolute',
-    top: 0,
+    bottom: 70, // Moved to bottom
     left: 0,
     right: 0,
-    bottom: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    zIndex: 10,
+  },
+  progressBarFill: {
+    height: '100%',
+  },
+  controls: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
-  loadingText: {
-    color: 'white',
-    marginTop: 10,
-    fontSize: 16,
-  },
-  errorTitle: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorText: {
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#FF4C54',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  retryButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  touchableOverlay: {
+  categoryBadge: {
     position: 'absolute',
-    top: 100,
-    left: 0,
-    right: 100, // Leave space for action buttons
-    bottom: 200,
-    zIndex: 5,
-  },
-  categoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(6),
-    borderRadius: scale(16),
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  categoryButtonText: {
-    fontSize: moderateScale(14),
-    fontWeight: '600',
-    marginRight: scale(4),
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  categoriesContainer: {
-    width: width * 0.85,
-    maxHeight: height * 0.7,
-    borderRadius: scale(16),
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  categoriesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: scale(16),
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  categoriesTitle: {
-    fontSize: moderateScale(18),
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    padding: scale(4),
-  },
-  categoriesScrollView: {
-    maxHeight: height * 0.6,
-  },
-  categoriesScrollContent: {
-    paddingBottom: verticalScale(16),
-  },
-  categoryItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: verticalScale(12),
-    paddingHorizontal: scale(16),
-    borderBottomWidth: 1,
-  },
-  selectedCategoryItem: {
-    backgroundColor: 'rgba(109, 76, 255, 0.1)',
-  },
-  categoryItemText: {
-    fontSize: moderateScale(16),
-    fontWeight: '500',
-  },
-  selectedCategoryItemText: {
-    color: '#0A84FF',
-    fontWeight: '700',
-  },
-  
-  // End of content screen
-  endOfContentContainer: {
-    height,
-    width,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  endOfContentTitle: {
-    color: '#FFF',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  endOfContentText: {
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  exploreArticlesButton: {
-    backgroundColor: '#0A84FF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-    marginTop: 16,
-  },
-  exploreArticlesButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  
-  // Loading more
-  loadingMoreContainer: {
-    height: 100,
-    width,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    backgroundColor: '#000',
-  },
-  loadingMoreText: {
-    color: '#FFF',
-    marginLeft: 10,
-    fontSize: 14,
-  },
-  categoryTag: {
-    position: 'absolute',
-    top: 100,
+    top: 90,
     left: 16,
-    backgroundColor: 'rgba(255, 76, 84, 0.8)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 16,
     zIndex: 10,
   },
-  categoryTagText: {
+  categoryText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 12,
   },
-  authorSeparator: {
-    color: 'rgba(255,255,255,0.6)',
-    marginHorizontal: 5,
+  videoInfo: {
+    position: 'absolute',
+    bottom: 75, // Just above progress bar
+    left: 16,
+    right: 70,
+    zIndex: 10,
   },
-  videoDate: {
-    color: 'rgba(255,255,255,0.6)',
+  videoTitle: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  actionButtons: {
+    position: 'absolute',
+    right: 16,
+    bottom: 80, // Above progress bar
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  actionButton: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  actionText: {
+    color: 'white',
     fontSize: 12,
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
-  pagerView: {
+  loadingContainer: {
     flex: 1,
-    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
-  pageContainer: {
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  loadingMoreContainer: {
+    height: 80,
+    width,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  loadingMoreText: {
+    marginLeft: 10,
+    fontSize: 14,
+  },
+  emptyContainer: {
     flex: 1,
-    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+  },
+  emptyMessage: {
+    fontSize: 16,
+    marginTop: 8,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  viewAllButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  viewAllButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  categoryModalContent: {
+    position: 'absolute',
+    width: 180,
+    borderRadius:.12,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    overflow: 'hidden',
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  categoryOptionText: {
+    fontSize: 15,
   },
 })

@@ -5,6 +5,7 @@ import { useColorScheme } from 'react-native';
 // Define theme colors
 export const lightTheme = {
   background: '#FFFFFF',
+  secondaryBackground: "#E8E7E2",
   cardBackground: '#F8F8F8',
   text: '#333333',
   textSecondary: '#666666',
@@ -18,6 +19,7 @@ export const lightTheme = {
 
 export const darkTheme = {
   background: '#121212',
+  secondaryBackground: "#E8E7E2",
   cardBackground: '#1E1E1E',
   text: '#FFFFFF',
   textSecondary: '#AAAAAA',

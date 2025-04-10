@@ -16,7 +16,7 @@ const MainScreenTabs = () => {
       screenOptions={{
         tabBarHideOnKeyboard: true,
         headerShown: false,
-        tabBarActiveTintColor: theme.accent,
+        tabBarActiveTintColor: theme.secondaryBackground,
         tabBarInactiveTintColor: theme.tabBarInactive,
         tabBarShowLabel: false,
         tabBarStyle: {
@@ -31,10 +31,14 @@ const MainScreenTabs = () => {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
+            focused ? 
+            <Entypo name="home" 
+            size={24} 
+            color={focused ? theme.secondaryBackground : theme.text} />:
             <AntDesign 
-              name='home'
-              size={24} 
-              color={focused ? theme.accent : theme.text}
+            name='home'
+            size={focused ? 26 : 24} 
+            color={focused ? theme.secondaryBackground : theme.text}
             />
           ),
         }}
@@ -46,12 +50,12 @@ const MainScreenTabs = () => {
             focused?
             <Entypo
               name='sound'
-              size={24} 
-              color={theme.accent}
+              size={focused ? 26 : 24}
+              color={theme.secondaryBackground}
             />:
             <AntDesign 
               name="sound" 
-              size={24} 
+              size={focused ? 26 : 24}
               color={theme.text} 
             />
           ),
@@ -63,8 +67,8 @@ const MainScreenTabs = () => {
           tabBarIcon: ({ focused }) => (
             <MaterialIcons
               name='article'
-              size={24}
-              color={focused ? theme.accent : theme.text}
+              size={focused ? 26 : 24}
+              color={focused ? theme.secondaryBackground : theme.text}
             />
           ),
         }}
@@ -75,8 +79,8 @@ const MainScreenTabs = () => {
           tabBarIcon: ({ focused }) => (
             <Ionicons
               name={focused ? 'search' : 'search-outline'}
-              size={24} 
-              color={focused ? theme.accent : theme.text}
+              size={focused ? 26 : 24}
+              color={focused ? theme.secondaryBackground : theme.text}
             />
           ),
         }}
@@ -87,8 +91,8 @@ const MainScreenTabs = () => {
           tabBarIcon: ({ focused }) => (
             <MaterialCommunityIcons
               name={focused ? 'account-circle' : 'account-circle-outline'}
-              size={24}
-              color={focused ? theme.accent : theme.text}
+              size={focused ? 26 : 24}
+              color={focused ? theme.secondaryBackground : theme.text}
             />
           ),
         }}

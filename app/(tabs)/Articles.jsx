@@ -7,10 +7,24 @@ import { StatusBar } from 'expo-status-bar'
 import { db } from '../../Utlis/firebase'
 import { useLocalSearchParams, router } from 'expo-router'
 import ArticleCard from '../../components/ArticleCard'
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming,
+  withSpring,
+  FadeIn,
+  SlideInRight,
+  SlideOutLeft,
+  runOnJS
+} from 'react-native-reanimated'
+import { GestureDetector, Gesture } from 'react-native-gesture-handler'
 import PagerView from 'react-native-pager-view'
 
 const { width, height } = Dimensions.get('window')
-const ARTICLES_PER_BATCH = 3 // Reduced for better initial load performance
+const ARTICLES_PER_BATCH = 5 // Increased for better stack experience
+
+// Maximum number of visible cards in the stack
+const MAX_VISIBLE_CARDS = 3
 
 const Articles = () => {
   const { theme } = useTheme()
@@ -23,6 +37,7 @@ const Articles = () => {
   const [hasMoreArticles, setHasMoreArticles] = useState(true)
   const [error, setError] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState('All')
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [categories, setCategories] = useState([
     'All', 
     'Politics', 
@@ -35,14 +50,12 @@ const Articles = () => {
     'Education',
     'World',
     'Environment',
-    'Finance',
-    'Lifestyle',
-    'Travel',
-    'Food',
-    'Automotive'
+    'Finance'
   ])
-  const [showCategoryModal, setShowCategoryModal] = useState(false)
-  const params = useLocalSearchParams() || {}
+  
+  // Animation values
+  const isAnimating = useRef(false)
+  
   const pagerRef = useRef(null)
   
   // Fetch initial articles
@@ -66,12 +79,9 @@ const Articles = () => {
       
       // Reset current index
       setCurrentIndex(0);
-      setTimeout(() => {
-        pagerRef.current?.setPage(0);
-      }, 100);
     }
   }, [selectedCategory]);
-
+  
   // Fetch articles filtered by category
   const fetchArticlesByCategory = async () => {
     try {
@@ -116,10 +126,6 @@ const Articles = () => {
       
       // Reset current index
       setCurrentIndex(0);
-      setTimeout(() => {
-        pagerRef.current?.setPage(0);
-      }, 100);
-      
       setLoading(false);
     } catch (error) {
       console.error(`Error fetching articles for category ${selectedCategory}:`, error);
@@ -128,26 +134,50 @@ const Articles = () => {
     }
   };
   
-  // Restore position if coming back from article detail
-  useEffect(() => {
-    if (params.restoreIndex && articles.length > 0 && !loading) {
-      const index = parseInt(params.restoreIndex)
-      if (!isNaN(index) && index >= 0 && index < articles.length) {
-        setCurrentIndex(index)
-        setTimeout(() => {
-          pagerRef.current?.setPage(index)
-        }, 100) // Small delay to ensure PagerView is ready
-      }
-    }
-  }, [params.restoreIndex, articles, loading])
+  // Load more articles
+  const loadMoreArticles = () => {
+    if (!hasMoreArticles || loadingMore || currentIndex < articles.length - 2) return;
+    console.log('Loading more articles...');
+    fetchMoreArticles();
+  };
   
-  // Check if we need to load more articles when approaching the end
-  useEffect(() => {
-    if (articles.length > 0 && currentIndex >= articles.length - 2 && hasMoreArticles && !loadingMore && selectedCategory === 'All') {
-      console.log('Approaching end of loaded articles, loading more...')
-      fetchMoreArticles()
+  // Handle going to the next article
+  const goToNextArticle = () => {
+    if (isAnimating.current) return;
+    
+    if (currentIndex >= articles.length - 1) {
+      // If we're at the last article, try to load more
+      if (hasMoreArticles && !loadingMore) {
+        loadMoreArticles();
+      }
+      return;
     }
-  }, [currentIndex, articles, hasMoreArticles, loadingMore, selectedCategory])
+    
+    isAnimating.current = true;
+    
+    // Preload more articles if needed
+    if (currentIndex >= articles.length - 3 && hasMoreArticles && !loadingMore) {
+      loadMoreArticles();
+    }
+    
+    // Move to next article
+    setTimeout(() => {
+      setCurrentIndex(prev => prev + 1);
+      isAnimating.current = false;
+    }, 300);
+  };
+  
+  // Handle going to the previous article
+  const goToPreviousArticle = () => {
+    if (isAnimating.current || currentIndex <= 0) return;
+    
+    isAnimating.current = true;
+    
+    setTimeout(() => {
+      setCurrentIndex(prev => prev - 1);
+      isAnimating.current = false;
+    }, 300);
+  };
   
   // Fetch articles from Firebase
   const fetchArticles = async (isInitialFetch = false) => {
@@ -375,27 +405,79 @@ const Articles = () => {
     setShowCategoryModal(false);
   };
   
-  // Handle page change event
+  // Handle page change
   const handlePageChange = (event) => {
-    const newIndex = event.nativeEvent.position;
-    console.log(`Page changed to ${newIndex}`)
+    const newIndex = event.nativeEvent.position
+    setCurrentIndex(newIndex)
     
-    if (newIndex !== currentIndex) {
-      setCurrentIndex(newIndex);
-      
-      // Check if we need to load more articles
-      if (articles.length > 0 && newIndex >= articles.length - 2 && hasMoreArticles && !loadingMore && selectedCategory === 'All') {
-        console.log('Approaching end of loaded articles, loading more...')
-        fetchMoreArticles()
-      }
+    // Load more articles when approaching the end
+    if (newIndex >= articles.length - 2 && hasMoreArticles && !loadingMore) {
+      loadMoreArticles()
     }
   }
+
+  // Go to specific page
+  const goToPage = (index) => {
+    if (pagerRef.current) {
+      pagerRef.current.setPage(index)
+    }
+  }
+
+  // Render the stacked articles
+  const renderArticleStack = () => {
+    if (articles.length === 0) {
+      return (
+        <View style={styles.noArticlesContainer}>
+          <Ionicons name="newspaper-outline" size={64} color={theme.accent} />
+          <Text style={[styles.noArticlesTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+            No News for Selected Category
+          </Text>
+          <Text style={[styles.noArticlesMessage, { color: theme.textSecondary, fontFamily: theme.font }]}>
+            Try selecting a different category
+          </Text>
+        </View>
+      )
+    }
+
+    return (
+      <View style={styles.cardsContainer}>
+        <PagerView
+          ref={pagerRef}
+          style={styles.pagerView}
+          initialPage={0}
+          onPageSelected={handlePageChange}
+          orientation="horizontal"
+          overdrag={true}
+          overScrollMode="always"
+          layout="stack"
+          showPageIndicator={true}
+          pageMargin={10}
+          transitionStyle="scroll"
+        >
+          {articles.map((article, index) => (
+            <View key={`${article.id}-${index}`} style={styles.pageContainer}>
+              <ArticleCard
+                article={article}
+                globalIndex={index}
+                cardIndex={0}
+                isLastInPage={index === articles.length - 2}
+                onEndReached={loadMoreArticles}
+              />
+            </View>
+          ))}
+        </PagerView>
+      </View>
+    )
+  }
+
+  // Navigation button row
+  
 
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
         <StatusBar style={theme.dark ? 'light' : 'dark'} />
-        <ActivityIndicator size="large" color={theme.accent} />
+        <ActivityIndicator size="large" color={theme.text} />
         <Text style={[styles.loadingText, { color: theme.text, fontFamily: theme.font }]}>
           Loading articles...
         </Text>
@@ -433,16 +515,18 @@ const Articles = () => {
           
           {/* Category Dropdown Button */}
           <TouchableOpacity 
-            style={[styles.categoryDropdown, { backgroundColor: theme.accent + '20' }]}
+            style={[styles.categoryDropdown, { backgroundColor: theme.secondaryBackground + '20' }]}
             onPress={() => setShowCategoryModal(true)}
           >
-            <Text style={[styles.selectedCategoryText, { color: theme.accent, fontFamily: theme.font }]}>
+            <Text style={[styles.selectedCategoryText, { color: 'white', fontFamily: theme.font }]}>
               {selectedCategory}
             </Text>
-            <MaterialIcons name="arrow-drop-down" size={24} color={theme.accent} />
+            <MaterialIcons name="arrow-drop-down" size={24} color='white' />
           </TouchableOpacity>
         </View>
-        <Text style={{color: theme.textSecondary, fontFamily: theme.font}}>Swipe to Change the News</Text>
+        <Text style={[styles.swipeInstruction, { color: theme.textSecondary, fontFamily: theme.font }]}>
+          Browse through article cards
+        </Text>
       </View>
       
       {/* Category Selection Modal */}
@@ -499,50 +583,20 @@ const Articles = () => {
         </TouchableOpacity>
       </Modal>
       
-      {articles.length === 0 ? (
-        <View style={styles.noArticlesContainer}>
-          <Ionicons name="newspaper-outline" size={64} color={theme.accent} />
-          <Text style={[styles.noArticlesTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
-            No News for Selected Category
-          </Text>
-          <Text style={[styles.noArticlesMessage, { color: theme.textSecondary, fontFamily: theme.font }]}>
-            Try selecting a different category
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.cardContainer}>
-          {/* PagerView for smooth swiping */}
-          <PagerView
-            ref={pagerRef}
-            style={styles.pagerView}
-            initialPage={currentIndex}
-            onPageSelected={handlePageChange}
-            orientation="horizontal"
-            offscreenPageLimit={1}
-            pageMargin={10}
-            overdrag={true}
-          >
-            {articles.map((article, index) => (
-              <View key={article.id} style={styles.pageContainer}>
-                <ArticleCard
-                  article={article}
-                  globalIndex={index}
-                  isLastInPage={index === articles.length - 2}
-                  onEndReached={fetchMoreArticles}
-                />
-              </View>
-            ))}
-          </PagerView>
-        </View>
-      )}
+      {/* Stacked Article Cards */}
+      {renderArticleStack()}
+      
       
       {loadingMore && (
-        <View style={styles.loadingMoreContainer}>
+        <Animated.View 
+          style={styles.loadingMoreContainer}
+          entering={FadeIn.duration(300)}
+        >
           <ActivityIndicator size="small" color={theme.accent} />
           <Text style={[styles.loadingMoreText, { color: theme.textSecondary, fontFamily: theme.font }]}>
             Loading more articles...
           </Text>
-        </View>
+        </Animated.View>
       )}
     </SafeAreaView>
   )
@@ -555,7 +609,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    marginTop: Platform.OS === 'ios' ? 50 : 80,
+    marginTop: Platform.OS === 'ios' ? 50 : 60,
     paddingHorizontal: 20,
     paddingBottom: 8,
   },
@@ -569,6 +623,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  swipeInstruction: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginTop: 5,
   },
   categoryDropdown: {
     flexDirection: 'row',
@@ -609,20 +668,50 @@ const styles = StyleSheet.create({
   categoryOptionText: {
     fontSize: 15,
   },
-  cardContainer: {
+  cardsContainer: {
     flex: 1,
-    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pagerView: {
     flex: 1,
-    width: width,
+    width: '100%',
   },
   pageContainer: {
-    width: width,
-    height: '100%',
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 10,
+    padding: 10,
+  },
+  navigationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 30 : 20,
+    left: 0,
+    right: 0,
+  },
+  navButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  pageIndicator: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
@@ -636,7 +725,7 @@ const styles = StyleSheet.create({
   },
   loadingMoreContainer: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 50 : 30,
+    bottom: Platform.OS === 'ios' ? 90 : 80,
     left: 0,
     right: 0,
     flexDirection: 'row',

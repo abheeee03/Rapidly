@@ -1,9 +1,11 @@
-import { StyleSheet, Text, View, Image, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native'
-import React, { useEffect, useState } from 'react'
+import { StyleSheet, Text, View, Image, Dimensions, TouchableOpacity, ActivityIndicator, Platform } from 'react-native'
+import React, { useEffect, useState, memo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Link } from 'expo-router'
 import { useTheme } from '../context/ThemeContext'
 import { BlurView } from 'expo-blur'
+import Animated from 'react-native-reanimated'
+import { LinearGradient } from 'expo-linear-gradient'
 
 const { width, height } = Dimensions.get('window')
 
@@ -12,17 +14,25 @@ const scale = (size) => (width / 375) * size
 const verticalScale = (size) => (height / 812) * size
 const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * factor
 
-const ArticleCard = ({ article, globalIndex, isLastInPage, onEndReached }) => {
+// Optimize ArticleCard with memo to prevent unnecessary re-renders
+const ArticleCard = memo(({ 
+  article, 
+  globalIndex, 
+  isLastInPage, 
+  onEndReached, 
+  style = {},
+  cardIndex = 0
+}) => {
   const { theme } = useTheme()
   const [imageLoading, setImageLoading] = useState(true)
   const [imageError, setImageError] = useState(false)
   
   // Check if this is the last card and we should load more
   useEffect(() => {
-    if (isLastInPage) {
+    if (isLastInPage && cardIndex === 0) {
       onEndReached?.()
     }
-  }, [isLastInPage, onEndReached])
+  }, [isLastInPage, onEndReached, cardIndex])
   
   if (!article) return null
   
@@ -63,8 +73,27 @@ const ArticleCard = ({ article, globalIndex, isLastInPage, onEndReached }) => {
     sourceIndex: globalIndex
   }
   
+  // Style for stacked cards - each card in the stack gets smaller
+  const getCardStackStyle = () => {
+    if (cardIndex === 0) return {}; // Top card has no special styling
+    
+    // For cards 1-3 in the stack, add progressively more scaling and opacity
+    return {
+      transform: [{ scale: Math.max(0.8, 1 - (cardIndex * 0.06)) }],
+      opacity: Math.max(0.5, 1 - (cardIndex * 0.2))
+    };
+  };
+  
   return (
-    <View style={[styles.articleCard, { backgroundColor: theme.cardBackground }]}>
+    <Animated.View 
+      style={[
+        styles.articleCard, 
+        { backgroundColor: theme.cardBackground },
+        getCardStackStyle(),
+        style
+      ]}
+    >
+      {/* Card Content */}
       <View style={styles.imageContainer}>
         <Image 
           source={getImageSource()}
@@ -77,66 +106,105 @@ const ArticleCard = ({ article, globalIndex, isLastInPage, onEndReached }) => {
             setImageError(true)
           }}
         />
+        
         {imageLoading && (
           <View style={styles.imageLoadingContainer}>
             <ActivityIndicator size="large" color={theme.accent} />
           </View>
         )}
-        <BlurView intensity={20} style={styles.imageOverlay}>
-          <View style={styles.categoryContainer}>
-            <Text style={[styles.cardCategory, { color: theme.accent, fontFamily: theme.font }]}>
-              {article.category || 'News'}
-            </Text>
-            <Text style={[styles.cardDate, { color: theme.textSecondary, fontFamily: theme.font }]}>
+        
+        {/* Gradient overlay for better text readability */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.8)']}
+          style={styles.gradientOverlay}
+        />
+        
+        {/* Date badge */}
+        <View style={styles.dateBadge}>
+          <BlurView intensity={70} style={styles.blurBadge}>
+            <Text style={[styles.cardDate, { color: 'white', fontFamily: theme.font }]}>
               {displayDate}
             </Text>
-          </View>
-        </BlurView>
+          </BlurView>
+        </View>
+        
+        {/* Category */}
+        <View style={styles.categoryBadge}>
+          <BlurView intensity={70} style={[styles.blurCategory, { borderColor: theme.accent }]}>
+            <Text style={[styles.cardCategory, { color: 'white', fontFamily: theme.font }]}>
+              {article.category || 'News'}
+            </Text>
+          </BlurView>
+        </View>
       </View>
       
       <View style={[styles.cardContent, { backgroundColor: theme.cardBackground }]}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
+          <Text 
+            style={[styles.cardTitle, { color: theme.text, fontFamily: theme.titleFont }]}
+            numberOfLines={2}
+          >
             {article.title}
           </Text>
           
-          <Text style={[styles.cardDescription, { color: theme.textSecondary, fontFamily: theme.font }]}>
+          <Text 
+            style={[styles.cardDescription, { color: theme.textSecondary, fontFamily: theme.font }]}
+            numberOfLines={3}
+          >
             {limitDescription(article.description)}
           </Text>
         </View>
 
-        <Link href={{
-          pathname: "/screens/ArticleDetail",
-          params: linkParams
-        }} asChild>
-          <TouchableOpacity 
-            style={[styles.viewDetailsButton, { backgroundColor: theme.accent }]} 
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.viewDetailsText, { color: theme.text, fontFamily: theme.font }]}>
-              Read More
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Ionicons name="eye-outline" size={16} color={theme.textSecondary} />
+            <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
+              {article.views || 0}
             </Text>
-            <Ionicons name="arrow-forward" size={20} color={theme.text} style={styles.buttonIcon} />
-          </TouchableOpacity>
-        </Link>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Ionicons name="heart-outline" size={16} color={theme.textSecondary} />
+            <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
+              {article.likes || 0}
+            </Text>
+          </View>
+        </View>
+
+        {cardIndex === 0 && (
+          <Link href={{
+            pathname: "/screens/ArticleDetail",
+            params: linkParams
+          }} asChild>
+            <TouchableOpacity 
+              style={[styles.viewDetailsButton, { backgroundColor: theme.accent }]} 
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.viewDetailsText, { color: 'white', fontFamily: theme.font }]}>
+                Read Article
+              </Text>
+              <Ionicons name="arrow-forward" size={20} color="white" style={styles.buttonIcon} />
+            </TouchableOpacity>
+          </Link>
+        )}
       </View>
-    </View>
+    </Animated.View>
   )
-}
+});
 
 export default ArticleCard
 
 const styles = StyleSheet.create({
   articleCard: {
     width: width - scale(40),
-    height: height - scale(180), // Adjusted to avoid tab bar
-    borderRadius: scale(32),
+    height: height - scale(180),
+    borderRadius: scale(24),
     overflow: 'hidden',
-    elevation: 5,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scale(3) },
-    shadowOpacity: 0.15,
-    shadowRadius: scale(8),
+    shadowOffset: { width: 0, height: scale(4) },
+    shadowOpacity: 0.2,
+    shadowRadius: scale(12),
     marginHorizontal: scale(20),
     marginVertical: verticalScale(20),
   },
@@ -160,60 +228,89 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
-  imageOverlay: {
+  gradientOverlay: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    padding: scale(24),
-    justifyContent: 'flex-start',
+    height: '50%',
   },
-  categoryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  dateBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    overflow: 'hidden',
+    borderRadius: 12,
   },
-  cardCategory: {
-    fontSize: moderateScale(16),
-    paddingVertical: verticalScale(8),
-    paddingHorizontal: scale(20),
-    backgroundColor: 'rgba(52, 152, 219, 0.2)',
-    borderRadius: scale(24),
+  blurBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     overflow: 'hidden',
   },
+  categoryBadge: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    overflow: 'hidden',
+    borderRadius: 16,
+  },
+  blurCategory: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#fff',
+    overflow: 'hidden',
+  },
+  cardCategory: {
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+  },
   cardDate: {
-    fontSize: moderateScale(16),
+    fontSize: moderateScale(12),
     fontWeight: '500',
   },
   cardContent: {
-    padding: scale(28),
+    padding: scale(24),
     flex: 1,
     justifyContent: 'space-between',
-    borderTopLeftRadius: scale(32),
-    borderTopRightRadius: scale(32),
-    marginTop: verticalScale(-32),
   },
   cardHeader: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   cardTitle: {
-    fontSize: moderateScale(26),
-    marginBottom: verticalScale(20),
-    lineHeight: moderateScale(34),
+    fontSize: moderateScale(24),
+    marginBottom: verticalScale(16),
+    lineHeight: moderateScale(32),
+    fontWeight: '800',
   },
   cardDescription: {
-    fontSize: moderateScale(16),
-    lineHeight: moderateScale(26),
-    marginBottom: verticalScale(28),
+    fontSize: moderateScale(15),
+    lineHeight: moderateScale(22),
+    marginBottom: verticalScale(12),
+    opacity: 0.85,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    marginBottom: verticalScale(16),
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: scale(24),
+  },
+  statText: {
+    fontSize: moderateScale(14),
+    marginLeft: 5,
   },
   viewDetailsButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: verticalScale(16),
-    borderRadius: scale(24),
+    paddingVertical: verticalScale(14),
+    borderRadius: scale(16),
     elevation: 2,
     shadowColor: '#3498db',
     shadowOffset: { width: 0, height: scale(2) },
@@ -221,7 +318,7 @@ const styles = StyleSheet.create({
     shadowRadius: scale(4),
   },
   viewDetailsText: {
-    fontSize: moderateScale(18),
+    fontSize: moderateScale(16),
     fontWeight: '600',
   },
   buttonIcon: {

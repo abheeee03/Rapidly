@@ -283,7 +283,7 @@ const MyAccount = () => {
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity 
           style={styles.backButton} 
-          onPress={() => router.back()}
+          onPress={() => router.push('/(tabs)/Account')}
         >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
@@ -296,7 +296,7 @@ const MyAccount = () => {
           {isSaving ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={[styles.saveButtonText, { fontFamily: theme.font }]}>Save</Text>
+            <Text style={[styles.saveButtonText, { fontFamily: theme.font, color: 'black' }]}>Save</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -307,9 +307,9 @@ const MyAccount = () => {
             source={user.photoURL ? { uri: user.photoURL } : require('../../assets/images/man.png')}
             style={styles.profilePicture}
           />
-          <TouchableOpacity style={styles.editPictureButton}>
+          {/* <TouchableOpacity style={styles.editPictureButton}>
             <Ionicons name="camera" size={20} color="#fff" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         <View style={styles.formSection}>
@@ -406,7 +406,7 @@ const MyAccount = () => {
                 style={[
                   styles.categoryChip,
                   profile.preferences.includes(category) 
-                    ? { backgroundColor: theme.accent } 
+                    ? { backgroundColor: theme.secondaryBackground } 
                     : { backgroundColor: theme.cardBackground, borderColor: theme.border }
                 ]}
                 onPress={() => toggleCategoryPreference(category)}
@@ -416,7 +416,7 @@ const MyAccount = () => {
                     styles.categoryText, 
                     { 
                       color: profile.preferences.includes(category) 
-                        ? '#fff' 
+                        ? 'black' 
                         : theme.text,
                       fontFamily: theme.font 
                     }
@@ -425,7 +425,7 @@ const MyAccount = () => {
                   {category}
                 </Text>
                 {profile.preferences.includes(category) && (
-                  <Ionicons name="checkmark" size={16} color="#fff" style={styles.checkIcon} />
+                  <Ionicons name="checkmark" size={16} color="black" style={styles.checkIcon} />
                 )}
               </TouchableOpacity>
             ))}
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   saveButton: {
-    backgroundColor: '#3D7DFF',
+    backgroundColor: '#E8E7E2',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,

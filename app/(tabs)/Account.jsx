@@ -92,12 +92,7 @@ const Account = () => {
           </Text>
         </View>
         <View style={[styles.statsContainer, { borderColor: theme.border }]}>
-          <View style={styles.stat}>
-            <Text style={[styles.statNumber, { color: theme.text, fontFamily: theme.titleFont }]}>
-              {user?.following?.length || 0}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary, fontFamily: theme.font }]}>Following</Text>
-          </View>
+          
           <View style={styles.stat}>
             <Text style={[styles.statNumber, { color: theme.text, fontFamily: theme.titleFont }]}>
               {loadingContent ? '...' : savedCount}
@@ -116,7 +111,7 @@ const Account = () => {
               <Ionicons 
                 name="bookmark" 
                 size={20} 
-                color={theme.accent}
+                color={theme.text}
                 style={styles.optionIcon} 
               />
               <Text style={[styles.optionText, { color: theme.text, fontFamily: theme.font }]}>
@@ -145,7 +140,7 @@ const Account = () => {
               value={isDarkMode}
               onValueChange={toggleTheme}
               trackColor={{ false: '#767577', true: '#81b0ff' }}
-              thumbColor={isDarkMode ? theme.accent : '#f4f3f4'}
+              thumbColor={isDarkMode ? theme.secondaryBackground : '#f4f3f4'}
             />
           </View>
           
