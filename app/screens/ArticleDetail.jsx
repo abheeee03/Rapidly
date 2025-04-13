@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, SafeAreaVi
 import React, { useState, useEffect } from 'react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
+import { useLanguage } from '../../context/LanguageContext'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -15,17 +16,41 @@ const { width, height } = Dimensions.get('window')
 const ArticleDetail = () => {
   const { theme } = useTheme()
   const { user } = useAuth()
+  const { language } = useLanguage()
   const params = useLocalSearchParams() || {}
   const [isSaved, setIsSaved] = useState(false)
   const [savedDocId, setSavedDocId] = useState(null)
   const [loading, setLoading] = useState(true)
   
+  // Get localized content based on selected language
+  const getLocalizedContent = () => {
+    switch (language) {
+      case 'hindi':
+        return {
+          title: params.title_hi || params.title || 'Article Title',
+          content: params.content_hi || params.content || 'No content available',
+        };
+      case 'marathi':
+        return {
+          title: params.title_mr || params.title || 'Article Title',
+          content: params.content_mr || params.content || 'No content available',
+        };
+      default:
+        return {
+          title: params.title || 'Article Title',
+          content: params.content || 'No content available',
+        };
+    }
+  };
+  
+  const localizedContent = getLocalizedContent();
+  
   // Parse article data from params with null checks
   const article = {
     id: params.id || 'unknown',
-    title: params.title || 'Article Title',
+    title: localizedContent.title,
     description: params.description || 'No description available',
-    content: params.content || 'No content available',
+    content: localizedContent.content,
     coverImage: params.coverImage || 'https://via.placeholder.com/800x400?text=No+Image',
     category: params.category || 'News',
     createdAt: params.createdAt || null,
@@ -48,8 +73,8 @@ const ArticleDetail = () => {
     try {
       if (!user) return;
       
-      const savedArticlesRef = collection(db, 'users', user.uid, 'savedArticles');
-      const q = query(savedArticlesRef, where('articleId', '==', article.id));
+      const savedRef = collection(db, 'users', user.uid, 'savedArticles');
+      const q = query(savedRef, where('articleId', '==', article.id));
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
@@ -63,182 +88,116 @@ const ArticleDetail = () => {
     }
   };
 
-  // Handle save/unsave article
+  // Handle saving/unsaving article
   const handleSaveArticle = async () => {
     if (!user) {
       Alert.alert('Login Required', 'Please login to save articles');
       return;
     }
-
+    
     try {
-      if (isSaved) {
-        // Unsave article
+      if (isSaved && savedDocId) {
+        // Remove from saved articles
         await deleteDoc(doc(db, 'users', user.uid, 'savedArticles', savedDocId));
         setIsSaved(false);
         setSavedDocId(null);
-        Alert.alert('Unsaved', 'Article has been removed from your saved collection');
       } else {
-        // Save article
-        const savedArticlesRef = collection(db, 'users', user.uid, 'savedArticles');
-        const docRef = await addDoc(savedArticlesRef, {
+        // Add to saved articles
+        const savedRef = collection(db, 'users', user.uid, 'savedArticles');
+        const docRef = await addDoc(savedRef, {
           articleId: article.id,
           title: article.title,
           description: article.description,
+          content: article.content,
           coverImage: article.coverImage,
           category: article.category,
+          createdAt: serverTimestamp(),
           savedAt: serverTimestamp()
         });
         
         setIsSaved(true);
         setSavedDocId(docRef.id);
-        Alert.alert('Saved', 'Article has been saved to your collection');
       }
     } catch (error) {
       console.error('Error saving/unsaving article:', error);
-      Alert.alert('Error', 'Failed to save article. Please try again.');
+      Alert.alert('Error', 'Failed to save/unsave article');
     }
   };
-  
-  // Calculate display date with error handling
-  const displayDate = params.createdAt ? 
-    (() => {
-      try {
-        return new Date(params.createdAt).toLocaleDateString()
-      } catch (error) {
-        console.log('Date parsing error:', error)
-        return 'Recent'
-      }
-    })() : 'Recent'
-  
+
   // Handle back navigation
   const handleBack = () => {
-    // Navigate back to the Articles screen with the original index
-    if (article.sourceIndex) {
-      router.push({
-        pathname: '/(tabs)/Articles',
-        params: { restoreIndex: article.sourceIndex }
-      })
-    } else {
-      router.back()
-    }
-  }
-  
+    router.back();
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
       
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Hero Image with Blur Effect */}
-        <View style={styles.imageContainer}>
-          <Image 
-            source={{ uri: article.coverImage }}
-            style={styles.coverImage}
-            resizeMode="cover"
+      {/* Header with back button and save button */}
+      <View style={[styles.header, { backgroundColor: theme.background }]}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={handleSaveArticle} style={styles.saveButton}>
+          <Ionicons 
+            name={isSaved ? "bookmark" : "bookmark-outline"} 
+            size={24} 
+            color={isSaved ? theme.primary : theme.text} 
           />
-          
-          {/* Blurred Overlay */}
-          <BlurView intensity={20} style={styles.blurOverlay}>
-            <View style={styles.headerButtons}>
-              {/* Back Button */}
-              <TouchableOpacity 
-                style={[styles.headerButton, { backgroundColor: theme.cardBackground + '80' }]}
-                onPress={handleBack}
-              >
-                <Ionicons name="chevron-back" size={24} color={theme.text} />
-              </TouchableOpacity>
-
-              {/* Save Button */}
-              <TouchableOpacity 
-                style={[styles.headerButton, { backgroundColor: theme.cardBackground + '80' }]}
-                onPress={handleSaveArticle}
-                disabled={loading}
-              >
-                <Ionicons 
-                  name={isSaved ? "bookmark" : "bookmark-outline"} 
-                  size={24} 
-                  color={theme.text} 
-                />
-              </TouchableOpacity>
-            </View>
-          </BlurView>
-        </View>
+        </TouchableOpacity>
+      </View>
+      
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Article Image */}
+        <Image 
+          source={{ uri: article.coverImage }} 
+          style={styles.coverImage}
+          resizeMode="cover"
+        />
         
         {/* Article Content */}
         <View style={[styles.contentContainer, { backgroundColor: theme.background }]}>
-          {/* Category */}
-          <View style={[styles.categoryContainer, { backgroundColor: theme.accent + '20' }]}>
-            <Text style={[styles.category, { color: theme.accent, fontFamily: theme.font }]}>
-              {article.category}
+          {/* Category and Date */}
+          <View style={styles.metaContainer}>
+            <View style={[styles.categoryBadge, { backgroundColor: theme.primary }]}>
+              <Text style={styles.categoryText}>{article.category}</Text>
+            </View>
+            
+            <Text style={[styles.dateText, { color: theme.textSecondary }]}>
+              {article.createdAt ? new Date(article.createdAt.seconds ? article.createdAt.seconds * 1000 : article.createdAt).toLocaleDateString() : 'Recent'}
             </Text>
           </View>
           
           {/* Title */}
-          <Text style={[styles.title, { color: theme.text, fontFamily: theme.titleFont }]}>
+          <Text style={[styles.title, { color: theme.text }]}>
             {article.title}
           </Text>
           
-          {/* Publication Date */}
-          <Text style={[styles.date, { color: theme.textSecondary, fontFamily: theme.font }]}>
-            {displayDate}
+          {/* Content */}
+          <Text style={[styles.content, { color: theme.text }]}>
+            {article.content}
           </Text>
           
-          {/* Article Stats */}
+          {/* Stats */}
           <View style={styles.statsContainer}>
-            <View style={[styles.statItem, { backgroundColor: theme.cardBackground }]}>
-              <Ionicons name="heart-outline" size={20} color={theme.textSecondary} />
-              <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
-                {article.likes}
+            <View style={styles.stat}>
+              <Ionicons name="eye-outline" size={16} color={theme.textSecondary} />
+              <Text style={[styles.statText, { color: theme.textSecondary }]}>
+                {article.views} views
               </Text>
             </View>
             
-            <View style={[styles.statItem, { backgroundColor: theme.cardBackground }]}>
-              <Ionicons name="eye-outline" size={20} color={theme.textSecondary} />
-              <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
-                {article.views}
+            <View style={styles.stat}>
+              <Ionicons name="heart-outline" size={16} color={theme.textSecondary} />
+              <Text style={[styles.statText, { color: theme.textSecondary }]}>
+                {article.likes} likes
               </Text>
             </View>
-
-            {/* Save Button for Text */}
-            <TouchableOpacity 
-              style={[
-                styles.saveStatItem, 
-                { backgroundColor: theme.cardBackground },
-                isSaved && { backgroundColor: theme.accent + '20' }
-              ]} 
-              onPress={handleSaveArticle}
-              disabled={loading}
-            >
-              <Ionicons 
-                name={isSaved ? "bookmark" : "bookmark-outline"} 
-                size={20} 
-                color={isSaved ? theme.accent : theme.textSecondary} 
-              />
-              <Text 
-                style={[
-                  styles.statText, 
-                  { 
-                    color: isSaved ? theme.accent : theme.textSecondary, 
-                    fontFamily: theme.font 
-                  }
-                ]}
-              >
-                {isSaved ? 'Saved' : 'Save'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Article Body */}
-          <View style={styles.bodyContainer}>
-            <Text style={[styles.description, { color: theme.text, fontFamily: theme.font }]}>
-              {article.description}
-            </Text>
-            
-            <Text style={[styles.content, { color: theme.text, fontFamily: theme.font }]}>
-              {article.content}
-            </Text>
           </View>
         </View>
       </ScrollView>
@@ -252,103 +211,95 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  imageContainer: {
-    position: 'relative',
-    width: width,
-    height: height * 0.4,
-  },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  blurOverlay: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    paddingTop: verticalScale(50),
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: scale(20),
-  },
-  headerButton: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: scale(20),
-    alignItems: 'center',
-    justifyContent: 'center',
     zIndex: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  coverImage: {
+    width: '100%',
+    height: 300,
   },
   contentContainer: {
     flex: 1,
-    padding: scale(20),
-    borderTopLeftRadius: scale(24),
-    borderTopRightRadius: scale(24),
-    marginTop: verticalScale(-20),
+    padding: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    marginTop: -20,
   },
-  categoryContainer: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(6),
-    borderRadius: scale(20),
-    marginBottom: verticalScale(12),
+  metaContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  category: {
-    fontSize: moderateScale(14),
-    fontWeight: '600',
+  categoryBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  categoryText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  dateText: {
+    fontSize: 12,
   },
   title: {
-    fontSize: moderateScale(28),
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: verticalScale(8),
-    lineHeight: moderateScale(36),
+    marginBottom: 16,
+    lineHeight: 32,
   },
-  date: {
-    fontSize: moderateScale(14),
-    marginBottom: verticalScale(16),
+  content: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 24,
   },
   statsContainer: {
     flexDirection: 'row',
-    marginBottom: verticalScale(20),
-    flexWrap: 'wrap',
-    gap: scale(10),
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
   },
-  statItem: {
+  stat: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(8),
-    borderRadius: scale(20),
-  },
-  saveStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(8),
-    borderRadius: scale(20),
-    marginLeft: 'auto',
+    marginRight: 16,
   },
   statText: {
-    marginLeft: scale(5),
-    fontSize: moderateScale(14),
+    marginLeft: 4,
+    fontSize: 14,
   },
-  bodyContainer: {
-    marginTop: verticalScale(16),
-  },
-  description: {
-    fontSize: moderateScale(18),
-    fontWeight: '500',
-    marginBottom: verticalScale(16),
-    lineHeight: moderateScale(28),
-  },
-  content: {
-    fontSize: moderateScale(16),
-    lineHeight: moderateScale(24),
-  }
 })

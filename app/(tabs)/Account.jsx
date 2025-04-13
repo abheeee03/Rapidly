@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Switch, SafeAreaView, ActivityIndicator, Modal } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage, LANGUAGES } from '../../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
 import { db } from '../../Utlis/firebase';
@@ -10,8 +11,10 @@ import { collection, query, getDocs } from 'firebase/firestore';
 const Account = () => {
   const { theme, isDarkMode, toggleTheme } = useTheme();
   const { user, isLoading, logout, isAuthenticated } = useAuth();
+  const { language, updateLanguage } = useLanguage();
   const [savedCount, setSavedCount] = useState(0);
   const [loadingContent, setLoadingContent] = useState(true);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   useEffect(() => {
     // If user is not authenticated, redirect to login
@@ -60,6 +63,24 @@ const Account = () => {
     const result = await logout();
     if (result.success) {
       router.push('/screens/LandingScreen');
+    }
+  };
+
+  const handleLanguageChange = async (newLanguage) => {
+    await updateLanguage(newLanguage);
+    setShowLanguageModal(false);
+  };
+
+  const getLanguageDisplayName = (langCode) => {
+    switch (langCode) {
+      case LANGUAGES.ENGLISH:
+        return 'English';
+      case LANGUAGES.HINDI:
+        return 'हिंदी (Hindi)';
+      case LANGUAGES.MARATHI:
+        return 'मराठी (Marathi)';
+      default:
+        return 'English';
     }
   };
 
@@ -144,6 +165,28 @@ const Account = () => {
             />
           </View>
           
+          {/* Language Selection */}
+          <TouchableOpacity 
+            style={[styles.option, { borderBottomColor: theme.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+            onPress={() => setShowLanguageModal(true)}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons
+                name="language"
+                size={20}
+                color={theme.text}
+                style={{ marginRight: 10 }}
+              />
+              <Text style={[styles.optionText, { color: theme.text, fontFamily: theme.font }]}>Language</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.optionText, { color: theme.textSecondary, fontFamily: theme.font, marginRight: 5 }]}>
+                {getLanguageDisplayName(language)}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+            </View>
+          </TouchableOpacity>
+          
           <TouchableOpacity 
             style={[styles.option, { borderBottomColor: theme.border }]}
             onPress={navigateToMyAccount}
@@ -195,6 +238,57 @@ const Account = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Language Selection Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text, fontFamily: theme.titleFont }]}>Select Language</Text>
+              <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <TouchableOpacity 
+                style={[styles.languageOption, { backgroundColor: language === LANGUAGES.ENGLISH ? theme.primary + '20' : 'transparent' }]}
+                onPress={() => handleLanguageChange(LANGUAGES.ENGLISH)}
+              >
+                <Text style={[styles.languageText, { color: theme.text, fontFamily: theme.font }]}>English</Text>
+                {language === LANGUAGES.ENGLISH && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.languageOption, { backgroundColor: language === LANGUAGES.HINDI ? theme.primary + '20' : 'transparent' }]}
+                onPress={() => handleLanguageChange(LANGUAGES.HINDI)}
+              >
+                <Text style={[styles.languageText, { color: theme.text, fontFamily: theme.font }]}>हिंदी (Hindi)</Text>
+                {language === LANGUAGES.HINDI && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.languageOption, { backgroundColor: language === LANGUAGES.MARATHI ? theme.primary + '20' : 'transparent' }]}
+                onPress={() => handleLanguageChange(LANGUAGES.MARATHI)}
+              >
+                <Text style={[styles.languageText, { color: theme.text, fontFamily: theme.font }]}>मराठी (Marathi)</Text>
+                {language === LANGUAGES.MARATHI && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -249,41 +343,67 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   section: {
-    marginVertical: 10,
-    paddingHorizontal: 20,
+    marginTop: 20,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
+    paddingHorizontal: 20,
   },
   option: {
-    paddingVertical: 15,
-    borderBottomWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
   },
   optionContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   optionIcon: {
-    marginRight: 10,
+    marginRight: 15,
   },
   optionText: {
     fontSize: 16,
   },
-  optionBadge: {
-    backgroundColor: '#FF4C54',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    minWidth: 24,
-    alignItems: 'center',
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
-  optionBadgeText: {
-    fontSize: 12,
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  languageText: {
+    fontSize: 16,
   },
 });

@@ -3,6 +3,7 @@ import React, { useEffect, useState, memo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { Link } from 'expo-router'
 import { useTheme } from '../context/ThemeContext'
+import { useLanguage } from '../context/LanguageContext'
 import { BlurView } from 'expo-blur'
 import Animated from 'react-native-reanimated'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -24,6 +25,7 @@ const ArticleCard = memo(({
   cardIndex = 0
 }) => {
   const { theme } = useTheme()
+  const { language } = useLanguage()
   const [imageLoading, setImageLoading] = useState(true)
   const [imageError, setImageError] = useState(false)
   
@@ -41,184 +43,202 @@ const ArticleCard = memo(({
     new Date(article.createdAt.seconds ? article.createdAt.seconds * 1000 : article.createdAt).toLocaleDateString() : 
     'Recent'
   
-  // Limit description length to prevent UI issues
-  const limitDescription = (text, limit = 120) => {
+  // Get content based on selected language
+  const getLocalizedContent = () => {
+    switch (language) {
+      case 'hindi':
+        return {
+          title: article.title_hi || article.title,
+          content: article.content_hi || article.content
+        };
+      case 'marathi':
+        return {
+          title: article.title_mr || article.title,
+          content: article.content_mr || article.content
+        };
+      default:
+        return {
+          title: article.title,
+          content: article.content
+        };
+    }
+  };
+  
+  const localizedContent = getLocalizedContent();
+  
+  // Limit description length for optimal display
+  const limitDescription = (text, limit = 700) => {
     if (!text) return 'No description available';
     return text.length > limit ? text.substring(0, limit) + '...' : text;
   }
   
-  // Safely determine image source
+  // Limit title length
+  const limitTitle = (text, limit = 90) => {
+    if (!text) return 'No title available';
+    return text.length > limit ? text.substring(0, limit) + '...' : text;
+  }
+  
+  // Get image source with fallback
   const getImageSource = () => {
-    if (!article.coverImage || imageError) {
-      return { uri: 'https://via.placeholder.com/800x400?text=No+Image' };
+    if (imageError) {
+      return require('../assets/images/cover-img.png');
     }
-    return { uri: article.coverImage };
-  }
-  
-  // Prepare navigation params
-  const linkParams = {
-    id: article.id || 'unknown',
-    title: article.title || 'Article Title',
-    description: article.description || 'No description available',
-    content: article.content || 'No content available',
-    coverImage: imageError ? 'https://via.placeholder.com/800x400?text=No+Image' : article.coverImage || 'https://via.placeholder.com/800x400?text=No+Image',
-    category: article.category || 'News',
-    createdAt: article.createdAt instanceof Date 
-      ? article.createdAt.toISOString() 
-      : article.createdAt?.seconds 
-        ? new Date(article.createdAt.seconds * 1000).toISOString() 
-        : new Date().toISOString(),
-    likes: article.likes?.toString() || '0',
-    views: article.views?.toString() || '0',
-    sourceIndex: globalIndex
-  }
-  
-  // Style for stacked cards - each card in the stack gets smaller
-  const getCardStackStyle = () => {
-    if (cardIndex === 0) return {}; // Top card has no special styling
     
-    // For cards 1-3 in the stack, add progressively more scaling and opacity
-    return {
-      transform: [{ scale: Math.max(0.8, 1 - (cardIndex * 0.06)) }],
-      opacity: Math.max(0.5, 1 - (cardIndex * 0.2))
-    };
-  };
+    if (article.thumbnailUrl) {
+      return { uri: article.thumbnailUrl };
+    }
+    
+    if (article.coverImage) {
+      return { uri: article.coverImage };
+    }
+    
+    return require('../assets/images/cover-img.png');
+  }
+  
+  // Get card stack style based on index
+  const getCardStackStyle = () => {
+    if (cardIndex === 0) {
+      return {
+        transform: [{ scale: 1 }],
+        zIndex: 3,
+      };
+    } else if (cardIndex === 1) {
+      return {
+        transform: [{ scale: 0.95 }],
+        zIndex: 2,
+      };
+    } else {
+      return {
+        transform: [{ scale: 0.9 }],
+        zIndex: 1,
+      };
+    }
+  }
   
   return (
     <Animated.View 
       style={[
-        styles.articleCard, 
-        { backgroundColor: theme.cardBackground },
+        styles.cardContainer, 
         getCardStackStyle(),
         style
       ]}
     >
-      {/* Card Content */}
-      <View style={styles.imageContainer}>
-        <Image 
-          source={getImageSource()}
-          style={styles.cardImage}
-          resizeMode="cover"
-          onLoadStart={() => setImageLoading(true)}
-          onLoadEnd={() => setImageLoading(false)}
-          onError={() => {
-            setImageLoading(false)
-            setImageError(true)
-          }}
-        />
-        
-        {imageLoading && (
-          <View style={styles.imageLoadingContainer}>
-            <ActivityIndicator size="large" color={theme.accent} />
-          </View>
-        )}
-        
-        {/* Gradient overlay for better text readability */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.8)']}
-          style={styles.gradientOverlay}
-        />
-        
-        {/* Date badge */}
-        <View style={styles.dateBadge}>
-          <BlurView intensity={70} style={styles.blurBadge}>
-            <Text style={[styles.cardDate, { color: 'white', fontFamily: theme.font }]}>
-              {displayDate}
-            </Text>
-          </BlurView>
-        </View>
-        
-        {/* Category */}
-        <View style={styles.categoryBadge}>
-          <BlurView intensity={70} style={[styles.blurCategory, { borderColor: theme.accent }]}>
-            <Text style={[styles.cardCategory, { color: 'white', fontFamily: theme.font }]}>
-              {article.category || 'News'}
-            </Text>
-          </BlurView>
-        </View>
-      </View>
-      
-      <View style={[styles.cardContent, { backgroundColor: theme.cardBackground }]}>
-        <View style={styles.cardHeader}>
-          <Text 
-            style={[styles.cardTitle, { color: theme.text, fontFamily: theme.titleFont }]}
-            numberOfLines={2}
-          >
-            {article.title}
-          </Text>
-          
-          <Text 
-            style={[styles.cardDescription, { color: theme.textSecondary, fontFamily: theme.font }]}
-            numberOfLines={3}
-          >
-            {limitDescription(article.description)}
-          </Text>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Ionicons name="eye-outline" size={16} color={theme.textSecondary} />
-            <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
-              {article.views || 0}
-            </Text>
-          </View>
-          
-          <View style={styles.statItem}>
-            <Ionicons name="heart-outline" size={16} color={theme.textSecondary} />
-            <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
-              {article.likes || 0}
-            </Text>
-          </View>
-        </View>
-
-        {cardIndex === 0 && (
-          <Link href={{
-            pathname: "/screens/ArticleDetail",
-            params: linkParams
-          }} asChild>
-            <TouchableOpacity 
-              style={[styles.viewDetailsButton, { backgroundColor: theme.accent }]} 
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.viewDetailsText, { color: 'white', fontFamily: theme.font }]}>
-                Read Article
+      <Link href={{
+        pathname: '/screens/ArticleDetail',
+        params: {
+          id: article.id,
+          title: localizedContent.title,
+          description: limitDescription(localizedContent.content, 100),
+          content: localizedContent.content,
+          coverImage: article.thumbnailUrl || article.coverImage,
+          category: article.category,
+          createdAt: article.createdAt,
+          likes: article.likes,
+          views: article.views,
+          sourceIndex: globalIndex
+        }
+      }} asChild>
+        <TouchableOpacity activeOpacity={0.9}>
+          <View style={[styles.card, { backgroundColor: theme.card }]}>
+            {/* Image Container */}
+            <View style={styles.imageContainer}>
+              {imageLoading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={theme.primary} />
+                </View>
+              )}
+              <Image
+                source={getImageSource()}
+                style={styles.image}
+                onLoadStart={() => setImageLoading(true)}
+                onLoadEnd={() => setImageLoading(false)}
+                onError={() => {
+                  setImageError(true);
+                  setImageLoading(false);
+                }}
+                resizeMode="cover"
+              />
+              
+              {/* Category Badge */}
+              <View style={[styles.categoryBadge, { backgroundColor: theme.primary }]}>
+                <Text style={styles.categoryText}>{article.category || 'News'}</Text>
+              </View>
+              
+              {/* Date Badge */}
+              <View style={[styles.dateBadge, { backgroundColor: theme.primary }]}>
+                <Text style={styles.dateText}>{displayDate}</Text>
+              </View>
+            </View>
+            
+            {/* Content Container */}
+            <View style={styles.contentContainer}>
+              <Text style={[styles.title, { color: theme.text, fontFamily: theme.titleFont }]}>
+                {limitTitle(localizedContent.title)}
               </Text>
-              <Ionicons name="arrow-forward" size={20} color="white" style={styles.buttonIcon} />
-            </TouchableOpacity>
-          </Link>
-        )}
-      </View>
+              
+              <Text style={[styles.description, { color: theme.textSecondary, fontFamily: theme.font }]}>
+                {limitDescription(localizedContent.content)}
+              </Text>
+              
+              {/* Stats Row */}
+              <View style={styles.statsRow}>
+                <View style={styles.stat}>
+                  <Ionicons name="eye-outline" size={16} color={theme.textSecondary} />
+                  <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
+                    {article.views || 0}
+                  </Text>
+                </View>
+                
+                <View style={styles.stat}>
+                  <Ionicons name="heart-outline" size={16} color={theme.textSecondary} />
+                  <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
+                    {article.likes || 0}
+                  </Text>
+                </View>
+                
+                <View style={styles.stat}>
+                  <Ionicons name="chatbubble-outline" size={16} color={theme.textSecondary} />
+                  <Text style={[styles.statText, { color: theme.textSecondary, fontFamily: theme.font }]}>
+                    {article.comments || 0}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Link>
     </Animated.View>
   )
-});
+})
 
 export default ArticleCard
 
 const styles = StyleSheet.create({
-  articleCard: {
-    width: width - scale(40),
-    height: height - scale(180),
-    borderRadius: scale(24),
+  cardContainer: {
+    width: '100%',
+    marginBottom: 20,
+    borderRadius: 16,
     overflow: 'hidden',
-    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: scale(4) },
-    shadowOpacity: 0.2,
-    shadowRadius: scale(12),
-    marginHorizontal: scale(20),
-    marginVertical: verticalScale(20),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  card: {
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   imageContainer: {
+    height: 200,
     width: '100%',
-    height: '55%',
     position: 'relative',
-    backgroundColor: '#f0f0f0',
   },
-  cardImage: {
+  image: {
     width: '100%',
     height: '100%',
   },
-  imageLoadingContainer: {
+  loadingContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -226,102 +246,61 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  gradientOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-  },
-  dateBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    overflow: 'hidden',
-    borderRadius: 12,
-  },
-  blurBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    zIndex: 1,
   },
   categoryBadge: {
     position: 'absolute',
-    bottom: 16,
-    left: 16,
-    overflow: 'hidden',
-    borderRadius: 16,
+    top: 10,
+    left: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    zIndex: 2,
   },
-  blurCategory: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#fff',
-    overflow: 'hidden',
+  categoryText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
-  cardCategory: {
-    fontSize: moderateScale(14),
-    fontWeight: '600',
+  dateBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    zIndex: 2,
   },
-  cardDate: {
-    fontSize: moderateScale(12),
-    fontWeight: '500',
+  dateText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
-  cardContent: {
-    padding: scale(24),
-    flex: 1,
-    justifyContent: 'space-between',
+  contentContainer: {
+    padding: 15,
   },
-  cardHeader: {
-    flex: 1,
-    justifyContent: 'flex-start',
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
   },
-  cardTitle: {
-    fontSize: moderateScale(24),
-    marginBottom: verticalScale(16),
-    lineHeight: moderateScale(32),
-    fontWeight: '800',
-  },
-  cardDescription: {
-    fontSize: moderateScale(15),
-    lineHeight: moderateScale(22),
-    marginBottom: verticalScale(12),
-    opacity: 0.85,
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 15,
   },
   statsRow: {
     flexDirection: 'row',
-    marginBottom: verticalScale(16),
+    justifyContent: 'space-between',
+    marginTop: 10,
   },
-  statItem: {
+  stat: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: scale(24),
   },
   statText: {
-    fontSize: moderateScale(14),
     marginLeft: 5,
+    fontSize: 12,
   },
-  viewDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(14),
-    borderRadius: scale(16),
-    elevation: 2,
-    shadowColor: '#3498db',
-    shadowOffset: { width: 0, height: scale(2) },
-    shadowOpacity: 0.3,
-    shadowRadius: scale(4),
-  },
-  viewDetailsText: {
-    fontSize: moderateScale(16),
-    fontWeight: '600',
-  },
-  buttonIcon: {
-    marginLeft: scale(10),
-  }
 }) 

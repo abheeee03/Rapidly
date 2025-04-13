@@ -2,13 +2,15 @@ import { StyleSheet, View, Text, Image, useWindowDimensions, TouchableOpacity, S
 import PagerView from 'react-native-pager-view';
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
 import AuthModal from '../components/AuthModal';
 
 export default function LandingScreen() {
   const pagerRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(0);
   const { width, height } = useWindowDimensions();
-  const {theme} = useTheme();
+  const { theme } = useTheme();
+  const { t } = useLanguage();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
@@ -72,11 +74,11 @@ export default function LandingScreen() {
         </View>
 
         <Text style={[styles.title, {fontFamily: theme.titleFont}]}>
-          Welcome to Rapidly
+          {t('welcome')}
         </Text>
 
         <Text style={[styles.description, {fontFamily: theme.font}]}>
-          Get the latest news instantly with {'\n'} short videos that keep you {'\n'} informed effortlessly.
+          {t('getStartedDescription')}
         </Text>
 
         <TouchableOpacity 
@@ -84,7 +86,7 @@ export default function LandingScreen() {
           onPress={handleGetStarted}
           activeOpacity={0.8}
         >
-          <Text style={[styles.buttonText, {fontFamily: theme.titleFont}]}>GET STARTED</Text>
+          <Text style={[styles.buttonText, {fontFamily: theme.titleFont}]}>{t('getStarted')}</Text>
           <Text style={styles.arrowIcon}>›</Text>
         </TouchableOpacity>
       </View>

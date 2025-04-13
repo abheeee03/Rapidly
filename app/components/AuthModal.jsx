@@ -21,6 +21,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'fire
 import { auth, db } from '../../Utlis/firebase';
 import { router } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
+import { useLanguage } from '@/context/LanguageContext';
 import PreferencesModal from '../../components/PreferencesModal';
 import { doc, setDoc } from 'firebase/firestore';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -44,63 +45,62 @@ const AuthModal = ({ visible, onClose }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const { theme } = useTheme();
+  const { t } = useLanguage();
   
   // Animation values
-  const slideAnim = useState(new Animated.Value(height))[0];
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const scaleAnim = useState(new Animated.Value(0.9))[0];
+  const modalAnimation = useRef(new Animated.Value(0)).current;
   const dropdownAnimation = useRef(new Animated.Value(0)).current;
-  const dropdownScaleAnimation = useRef(new Animated.Value(0.9)).current;
+  const dropdownScaleAnimation = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     if (visible) {
-      // Reset form
+      // Reset form when modal becomes visible
       if (!isSignUp) {
         setEmail('');
         setPassword('');
       }
       
-      // Start animations
+      Animated.timing(modalAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(modalAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (showGenderDropdown) {
       Animated.parallel([
-        Animated.timing(fadeAnim, {
+        Animated.timing(dropdownAnimation, {
           toValue: 1,
-          duration: 300,
+          duration: 200,
           useNativeDriver: true,
         }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 50,
-          friction: 8,
+        Animated.spring(dropdownScaleAnimation, {
+          toValue: 1,
           useNativeDriver: true,
         }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: true,
-        })
       ]).start();
     } else {
-      // Close animations
       Animated.parallel([
-        Animated.timing(fadeAnim, {
+        Animated.timing(dropdownAnimation, {
           toValue: 0,
           duration: 200,
           useNativeDriver: true,
         }),
-        Animated.timing(slideAnim, {
-          toValue: height,
-          duration: 250,
+        Animated.spring(dropdownScaleAnimation, {
+          toValue: 0.95,
           useNativeDriver: true,
         }),
-        Animated.timing(scaleAnim, {
-          toValue: 0.9,
-          duration: 250,
-          useNativeDriver: true,
-        })
       ]).start();
     }
-  }, [visible]);
+  }, [showGenderDropdown]);
 
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
@@ -112,12 +112,12 @@ const AuthModal = ({ visible, onClose }) => {
   const handleAuth = async () => {
     if (isSignUp) {
       if (!name || !email || !password || !phone || !gender || !dob) {
-        Alert.alert('Error', 'Please fill in all fields');
+        Alert.alert(t('error'), t('errorAllFields'));
         return;
       }
     } else {
       if (!email || !password) {
-        Alert.alert('Error', 'Please fill in all fields');
+        Alert.alert(t('error'), t('errorAllFields'));
         return;
       }
     }
@@ -152,7 +152,7 @@ const AuthModal = ({ visible, onClose }) => {
       setLoading(false);
     } catch (error) {
       setLoading(false);
-      Alert.alert('Error', error.message);
+      Alert.alert(t('error'), error.message);
     }
   };
 
@@ -172,30 +172,17 @@ const AuthModal = ({ visible, onClose }) => {
       router.replace('/(tabs)');
     } catch (error) {
       console.error('Error saving preferences:', error);
-      Alert.alert('Error', 'Failed to save preferences. Please try again.');
+      Alert.alert(t('error'), 'Failed to save preferences. Please try again.');
     }
   };
 
   const toggleGenderDropdown = () => {
     setShowGenderDropdown(!showGenderDropdown);
-    Animated.parallel([
-      Animated.timing(dropdownAnimation, {
-        toValue: showGenderDropdown ? 0 : 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.spring(dropdownScaleAnimation, {
-        toValue: showGenderDropdown ? 0.9 : 1,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      })
-    ]).start();
   };
 
   const selectGender = (selectedGender) => {
     setGender(selectedGender);
-    toggleGenderDropdown();
+    setShowGenderDropdown(false);
   };
 
   if (!visible) return null;
@@ -203,12 +190,9 @@ const AuthModal = ({ visible, onClose }) => {
   return (
     <TouchableWithoutFeedback onPress={onClose}>
       <View style={styles.container}>
-        <Animated.View 
-          style={[
-            styles.backdrop,
-            { opacity: fadeAnim }
-          ]}
-        />
+        <TouchableWithoutFeedback>
+          <Animated.View style={[styles.backdrop, { opacity: modalAnimation }]} />
+        </TouchableWithoutFeedback>
         
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -221,8 +205,10 @@ const AuthModal = ({ visible, onClose }) => {
                 { 
                   backgroundColor: theme.cardBackground,
                   transform: [
-                    { translateY: slideAnim },
-                    { scale: scaleAnim }
+                    { translateY: modalAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [height, 0],
+                    }) },
                   ]
                 }
               ]}
@@ -230,12 +216,12 @@ const AuthModal = ({ visible, onClose }) => {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.header}>
                   <Text style={[styles.title, { color: theme.text, fontFamily: theme.titleFont }]}>
-                    {isSignUp ? 'Create Account' : 'Welcome Back'}
+                    {isSignUp ? t('createAccount') : t('welcomeBack')}
                   </Text>
                   <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: theme.font }]}>
                     {isSignUp 
-                      ? 'Sign up to start your journey' 
-                      : 'Sign in to continue your experience'}
+                      ? t('signUpDescription') 
+                      : t('signInDescription')}
                   </Text>
                 </View>
 
@@ -245,7 +231,7 @@ const AuthModal = ({ visible, onClose }) => {
                       <AntDesign name="user" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                       <TextInput
                         style={[styles.input, { color: theme.text, fontFamily: theme.font }]}
-                        placeholder="Full Name"
+                        placeholder={t('fullNamePlaceholder')}
                         placeholderTextColor={theme.textSecondary}
                         value={name}
                         onChangeText={setName}
@@ -257,7 +243,7 @@ const AuthModal = ({ visible, onClose }) => {
                     <AntDesign name="mail" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { color: theme.text, fontFamily: theme.font }]}
-                      placeholder="Email"
+                      placeholder={t('emailPlaceholder')}
                       placeholderTextColor={theme.textSecondary}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -270,7 +256,7 @@ const AuthModal = ({ visible, onClose }) => {
                     <AntDesign name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { color: theme.text, fontFamily: theme.font }]}
-                      placeholder="Password"
+                      placeholder={t('passwordPlaceholder')}
                       placeholderTextColor={theme.textSecondary}
                       secureTextEntry={!showPassword}
                       value={password}
@@ -291,7 +277,7 @@ const AuthModal = ({ visible, onClose }) => {
                         <AntDesign name="phone" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                         <TextInput
                           style={[styles.input, { color: theme.text, fontFamily: theme.font }]}
-                          placeholder="Phone Number"
+                          placeholder={t('phonePlaceholder')}
                           placeholderTextColor={theme.textSecondary}
                           keyboardType="phone-pad"
                           value={phone}
@@ -306,7 +292,7 @@ const AuthModal = ({ visible, onClose }) => {
                           onPress={toggleGenderDropdown}
                         >
                           <Text style={[styles.input, { color: gender ? theme.text : theme.textSecondary }]}>
-                            {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : "Select Gender"}
+                            {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : t('genderPlaceholder')}
                           </Text>
                           <Ionicons 
                             name={showGenderDropdown ? "chevron-up" : "chevron-down"} 
@@ -346,7 +332,7 @@ const AuthModal = ({ visible, onClose }) => {
                                 >
                                   <View style={styles.popupHeader}>
                                     <Text style={[styles.popupTitle, { color: theme.text, fontFamily: theme.titleFont }]}>
-                                      Select Gender
+                                      {t('selectGender')}
                                     </Text>
                                     <TouchableOpacity onPress={toggleGenderDropdown}>
                                       <Ionicons name="close" size={24} color={theme.textSecondary} />
@@ -378,7 +364,7 @@ const AuthModal = ({ visible, onClose }) => {
                                           }
                                         ]}
                                       >
-                                        Male
+                                        {t('male')}
                                       </Text>
                                     </TouchableOpacity>
                                     
@@ -406,7 +392,7 @@ const AuthModal = ({ visible, onClose }) => {
                                           }
                                         ]}
                                       >
-                                        Female
+                                        {t('female')}
                                       </Text>
                                     </TouchableOpacity>
                                     
@@ -433,7 +419,7 @@ const AuthModal = ({ visible, onClose }) => {
                                           }
                                         ]}
                                       >
-                                        Other
+                                        {t('other')}
                                       </Text>
                                     </TouchableOpacity>
                                   </View>
@@ -472,7 +458,7 @@ const AuthModal = ({ visible, onClose }) => {
                     disabled={loading}
                   >
                     <Text style={[styles.authButtonText, { fontFamily: theme.titleFont }]}>
-                      {loading ? 'Please wait...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+                      {loading ? t('pleaseWait') : (isSignUp ? t('signUp') : t('signIn'))}
                     </Text>
                   </TouchableOpacity>
 
@@ -482,8 +468,8 @@ const AuthModal = ({ visible, onClose }) => {
                   >
                     <Text style={[styles.switchText, { color: theme.textSecondary, fontFamily: theme.font }]}>
                       {isSignUp 
-                        ? "Already have an account? Sign In" 
-                        : "Don't have an account? Sign Up"}
+                        ? t('alreadyHaveAccount')
+                        : t('dontHaveAccount')}
                     </Text>
                   </TouchableOpacity>
                 </View>
